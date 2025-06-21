@@ -16,9 +16,36 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Security middleware - temporarily disable CSP for debugging
+// Security middleware with properly configured CSP
 app.use(helmet({
-  contentSecurityPolicy: false
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "https://cdn.jsdelivr.net",
+        "https://cdn.plaid.com"
+      ],
+      scriptSrcElem: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://cdn.jsdelivr.net",
+        "https://cdn.plaid.com"
+      ],
+      scriptSrcAttr: ["'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      styleSrcElem: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      styleSrcAttr: ["'unsafe-inline'"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https://production.plaid.com", "https://sandbox.plaid.com"],
+      frameSrc: ["'self'", "https://cdn.plaid.com"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"]
+    }
+  }
 }));
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
