@@ -4,28 +4,39 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>COVBudget 2.0 - Smart Personal Finance</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700;900&family=Roboto+Slab:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Roboto:wght@300;400;500;600;700;900&family=Roboto+Slab:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
     <style>
         :root {
-            --primary-orange: #FF6B35;
-            --secondary-orange: #F7931E;
-            --dark-brown: #8B4513;
-            --light-brown: #D2691E;
-            --cream: #FFF8DC;
-            --dark-bg: #1A0F0A;
-            --card-bg: #2D1B12;
-            --text-light: #FFF8DC;
-            --text-muted: #B8860B;
-            --accent-gold: #FFD700;
-            --success-orange: #FF8C42;
-            --warning-amber: #FFA500;
-            --error-red: #DC143C;
-            --shadow-orange: rgba(255, 107, 53, 0.3);
+            /* Professional Legal Dark Orange & Brown Theme */
+            --primary-orange: #D2691E;        /* Peru Orange - Professional */
+            --secondary-orange: #CD853F;      /* Sandy Brown - Warm */
+            --dark-brown: #2F1B14;            /* Dark Chocolate - Deep */
+            --medium-brown: #4A2C2A;          /* Dark Reddish Brown */
+            --light-brown: #8B4513;           /* Saddle Brown - Rich */
+            --accent-brown: #A0522D;          /* Sienna - Elegant */
+            --cream: #FDF5E6;                 /* Old Lace - Warm White */
+            --dark-bg: #1A0F0A;               /* Almost Black Brown */
+            --card-bg: #2D1B12;               /* Dark Card Background */
+            --text-light: #FDF5E6;            /* Cream Text */
+            --text-muted: #CD853F;            /* Muted Orange */
+            --accent-gold: #DAA520;           /* Goldenrod - Professional */
+            --success-orange: #FF8C42;        /* Success State */
+            --warning-amber: #FFA500;         /* Warning State */
+            --error-red: #DC143C;             /* Error State */
+            --shadow-orange: rgba(210, 105, 30, 0.4);
             --gradient-primary: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange));
-            --gradient-bg: linear-gradient(135deg, var(--dark-bg) 0%, var(--dark-brown) 50%, var(--light-brown) 100%);
+            --gradient-bg: linear-gradient(135deg, var(--dark-bg) 0%, var(--dark-brown) 50%, var(--medium-brown) 100%);
+            --gradient-card: linear-gradient(145deg, var(--card-bg), var(--medium-brown));
+            
+            /* Professional Spacing */
+            --border-radius: 12px;
+            --border-radius-lg: 20px;
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.15);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.2);
         }
 
         * {
@@ -35,13 +46,28 @@
         }
 
         body {
-            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
             background: var(--gradient-bg);
             color: var(--text-light);
-            line-height: 1.6;
+            line-height: 1.7;
             min-height: 100vh;
             overflow-x: hidden;
             font-weight: 400;
+            letter-spacing: -0.01em;
+        }
+
+        /* Professional Typography */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            line-height: 1.3;
+        }
+
+        .legal-heading {
+            font-family: 'Inter', sans-serif;
+            font-weight: 700;
+            letter-spacing: -0.03em;
         }
 
         /* Navigation */
@@ -66,14 +92,15 @@
         }
 
         .logo {
-            font-family: 'Roboto Slab', serif;
+            font-family: 'Inter', sans-serif;
             font-size: 1.8rem;
-            font-weight: 700;
+            font-weight: 800;
             background: var(--gradient-primary);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            letter-spacing: -0.5px;
+            letter-spacing: -0.02em;
+            text-transform: uppercase;
         }
 
         .nav-status {
@@ -119,16 +146,17 @@
         }
 
         .hero h1 {
-            font-family: 'Roboto Slab', serif;
+            font-family: 'Inter', sans-serif;
             font-size: clamp(2.5rem, 6vw, 4.5rem);
-            font-weight: 700;
+            font-weight: 800;
             margin-bottom: 2rem;
             background: var(--gradient-primary);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            letter-spacing: -0.02em;
-            line-height: 1.2;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            text-transform: uppercase;
         }
 
         .hero-subtitle {
@@ -213,13 +241,14 @@
         }
 
         .feature-card {
-            background: var(--card-bg);
-            border-radius: 24px;
+            background: var(--gradient-card);
+            border-radius: var(--border-radius-lg);
             padding: 3rem;
-            border: 1px solid rgba(255, 107, 53, 0.1);
+            border: 2px solid rgba(210, 105, 30, 0.15);
             transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             position: relative;
             overflow: hidden;
+            box-shadow: var(--shadow-md);
         }
 
         .feature-card::before {
@@ -233,9 +262,10 @@
         }
 
         .feature-card:hover {
-            transform: translateY(-10px) scale(1.02);
-            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4), 0 0 40px var(--shadow-orange);
-            border-color: rgba(255, 107, 53, 0.3);
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: var(--shadow-lg), 0 0 30px var(--shadow-orange);
+            border-color: rgba(210, 105, 30, 0.4);
+            background: linear-gradient(145deg, var(--medium-brown), var(--light-brown));
         }
 
         .feature-icon {
@@ -283,27 +313,29 @@
             flex-shrink: 0;
         }
 
-        /* Buttons */
+        /* Professional Buttons */
         .btn {
             background: var(--gradient-primary);
-            color: white;
+            color: var(--cream);
             border: none;
-            padding: 16px 32px;
-            border-radius: 8px;
+            padding: 18px 36px;
+            border-radius: var(--border-radius);
             font-size: 0.95rem;
-            font-weight: 500;
-            font-family: 'Roboto', sans-serif;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
             cursor: pointer;
             transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             text-decoration: none;
             display: inline-flex;
             align-items: center;
-            gap: 0.6rem;
+            gap: 0.8rem;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 4px 12px var(--shadow-orange);
+            box-shadow: var(--shadow-md);
             border: 2px solid transparent;
-            letter-spacing: 0.3px;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            font-size: 0.85rem;
         }
 
         .btn::before {
