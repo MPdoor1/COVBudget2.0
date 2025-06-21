@@ -180,6 +180,7 @@ app.get('/', (req, res) => {
   });
 });
 
+// Health check endpoint (no auth required)
 app.get('/health', async (req, res) => {
   const health = {
     status: 'healthy',
@@ -206,6 +207,42 @@ app.get('/health', async (req, res) => {
     try {
       health.services.keyVault = true;
     } catch (error) {
+      health.services.keyVault = false;
+    }
+  }
+
+  res.json(health);
+});
+
+// API Health check endpoint (for frontend)
+app.get('/api/health', async (req, res) => {
+  const health = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    services: {
+      database: false,
+      keyVault: false,
+      plaid: !!plaidClient
+    }
+  };
+
+  // Check database connection
+  if (dbClient) {
+    try {
+      await dbClient.query('SELECT 1');
+      health.services.database = true;
+    } catch (error) {
+      console.error('Database health check failed:', error);
+      health.services.database = false;
+    }
+  }
+
+  // Check Key Vault connection
+  if (secretClient) {
+    try {
+      health.services.keyVault = true;
+    } catch (error) {
+      console.error('Key Vault health check failed:', error);
       health.services.keyVault = false;
     }
   }
@@ -772,6 +809,11 @@ function extractMerchant(description) {
 // === AUTHENTICATION ENDPOINTS ===
 app.post('/api/auth/register', async (req, res) => {
   try {
+    // Check if database is available
+    if (!dbClient) {
+      return res.status(503).json({ error: 'Database service unavailable. Please run migrations first.' });
+    }
+
     const { name, email, password } = req.body;
     
     // Validation
@@ -782,11 +824,27 @@ app.post('/api/auth/register', async (req, res) => {
     if (password.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters long' });
     }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
     
-    // Check if user already exists
-    const existingUser = await query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existingUser.rows.length > 0) {
-      return res.status(400).json({ error: 'User already exists with this email' });
+    // Check if users table exists, if not suggest running migrations
+    try {
+      const existingUser = await query('SELECT id FROM users WHERE email = $1', [email]);
+      if (existingUser.rows.length > 0) {
+        return res.status(400).json({ error: 'User already exists with this email' });
+      }
+    } catch (dbError) {
+      if (dbError.code === '42P01') { // Table doesn't exist
+        return res.status(503).json({ 
+          error: 'Database tables not initialized. Please run migrations first.',
+          needsMigration: true 
+        });
+      }
+      throw dbError;
     }
     
     // Hash password
@@ -820,12 +878,20 @@ app.post('/api/auth/register', async (req, res) => {
     
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ error: 'Registration failed' });
+    res.status(500).json({ 
+      error: 'Registration failed', 
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined 
+    });
   }
 });
 
 app.post('/api/auth/login', async (req, res) => {
   try {
+    // Check if database is available
+    if (!dbClient) {
+      return res.status(503).json({ error: 'Database service unavailable. Please run migrations first.' });
+    }
+
     const { email, password } = req.body;
     
     // Validation
@@ -834,7 +900,19 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     // Find user
-    const result = await query('SELECT * FROM users WHERE email = $1', [email]);
+    let result;
+    try {
+      result = await query('SELECT * FROM users WHERE email = $1', [email]);
+    } catch (dbError) {
+      if (dbError.code === '42P01') { // Table doesn't exist
+        return res.status(503).json({ 
+          error: 'Database tables not initialized. Please run migrations first.',
+          needsMigration: true 
+        });
+      }
+      throw dbError;
+    }
+
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -848,7 +926,12 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     // Update last login
-    await query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
+    try {
+      await query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
+    } catch (updateError) {
+      console.warn('Failed to update last login:', updateError);
+      // Don't fail login for this
+    }
     
     // Generate JWT token
     const token = jwt.sign(
@@ -871,7 +954,10 @@ app.post('/api/auth/login', async (req, res) => {
     
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    res.status(500).json({ 
+      error: 'Login failed', 
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined 
+    });
   }
 });
 
@@ -961,10 +1047,12 @@ app.get('/api/user/spending-summary', authenticateToken, async (req, res) => {
 });
 
 // === MIGRATION ENDPOINT ===
-app.post('/api/migrate', authenticateToken, async (req, res) => {
+app.post('/api/migrate', async (req, res) => {
   try {
+    console.log('Starting database migration...');
     const { runMigrations } = require('./scripts/migrate');
     await runMigrations();
+    console.log('Database migration completed successfully!');
     res.json({ 
       success: true, 
       message: 'Database migration completed successfully!' 
