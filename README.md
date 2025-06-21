@@ -1,5 +1,7 @@
 # COVBudget 2.0 - Azure Deployment Ready
 
+🚀 **Status: Infrastructure deployed! GitHub Actions will handle app deployment.**
+
 A minimal Node.js web application configured for automatic deployment to Azure with database and key vault integration.
 
 ## Features
