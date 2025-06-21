@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COVBudget 2.0 - Personal Finance Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .header p {
+            color: #666;
+            margin-top: 0.5rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card h3 {
+            color: #667eea;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+
+        .feature-list {
+            list-style: none;
+        }
+
+        .feature-list li {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+        }
+
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+
+        .feature-list li::before {
+            content: '✅';
+            margin-right: 0.5rem;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 15px;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+
+        .demo-section {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 15px;
+            padding: 2rem;
+            text-align: center;
+            color: white;
+        }
+
+        .api-endpoint {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 5px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .endpoint-method {
+            background: #667eea;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+
+        .status-running { background: #28a745; }
+        .status-warning { background: #ffc107; }
+        .status-error { background: #dc3545; }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .header {
+                padding: 1rem;
+            }
+            
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>💰 COVBudget 2.0</h1>
+        <p>Personal Finance & Banking Integration Platform</p>
+    </div>
+
+    <div class="container">
+        <div class="demo-section">
+            <h2>🎉 Deployment Successful!</h2>
+            <p>Your budgeting app is live and ready for bank integration</p>
+            <div class="stats-grid" style="margin-top: 2rem;">
+                <div class="stat-item">
+                    <div class="stat-number" id="serverStatus">🟢</div>
+                    <div class="stat-label">Server Status</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="dbStatus">🔄</div>
+                    <div class="stat-label">Database</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="plaidStatus">🔄</div>
+                    <div class="stat-label">Banking API</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="keyVaultStatus">🔄</div>
+                    <div class="stat-label">Key Vault</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <h3>🏦 Banking Integration Features</h3>
+                <ul class="feature-list">
+                    <li>Connect 12,000+ banks via Plaid</li>
+                    <li>Real-time transaction sync</li>
+                    <li>Account balance monitoring</li>
+                    <li>Automatic categorization</li>
+                    <li>Multi-account management</li>
+                </ul>
+                <button class="btn" onclick="testBankConnection()" style="margin-top: 1rem;">Test Bank Integration</button>
+            </div>
+
+            <div class="card">
+                <h3>📊 Data Analysis & Insights</h3>
+                <ul class="feature-list">
+                    <li>Spending pattern analysis</li>
+                    <li>Category-wise breakdowns</li>
+                    <li>Monthly trend tracking</li>
+                    <li>Budget vs actual comparison</li>
+                    <li>Financial goal progress</li>
+                </ul>
+                <canvas id="demoChart" width="400" height="200" style="margin-top: 1rem;"></canvas>
+            </div>
+
+            <div class="card">
+                <h3>💳 Budget Management</h3>
+                <ul class="feature-list">
+                    <li>Custom budget categories</li>
+                    <li>Monthly/weekly budgets</li>
+                    <li>Overspending alerts</li>
+                    <li>Goal setting & tracking</li>
+                    <li>Transaction rules</li>
+                </ul>
+                <button class="btn" onclick="showBudgetDemo()" style="margin-top: 1rem;">View Budget Demo</button>
+            </div>
+
+            <div class="card">
+                <h3>🔐 Security & Privacy</h3>
+                <ul class="feature-list">
+                    <li>Bank-level encryption</li>
+                    <li>Azure Key Vault secrets</li>
+                    <li>JWT authentication</li>
+                    <li>Rate limiting protection</li>
+                    <li>GDPR compliant</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>🛠️ API Endpoints</h3>
+                <div class="api-endpoint">
+                    <span class="endpoint-method">POST</span>/api/plaid/link-token
+                </div>
+                <div class="api-endpoint">
+                    <span class="endpoint-method">GET</span>/api/accounts
+                </div>
+                <div class="api-endpoint">
+                    <span class="endpoint-method">GET</span>/api/transactions
+                </div>
+                <div class="api-endpoint">
+                    <span class="endpoint-method">GET</span>/api/analytics/spending
+                </div>
+                <button class="btn" onclick="window.open('/health', '_blank')" style="margin-top: 1rem;">View Health Check</button>
+            </div>
+
+            <div class="card">
+                <h3>🚀 Next Steps</h3>
+                <ul class="feature-list">
+                    <li>Set up Plaid API credentials</li>
+                    <li>Run database migrations</li>
+                    <li>Configure frontend application</li>
+                    <li>Connect your first bank account</li>
+                    <li>Start tracking your finances!</li>
+                </ul>
+                <button class="btn" onclick="runMigrations()" style="margin-top: 1rem;">Run DB Migration</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check system health on load
+        async function checkHealth() {
+            try {
+                const response = await fetch('/health');
+                const health = await response.json();
+                
+                document.getElementById('dbStatus').textContent = health.services.database ? '🟢' : '🔴';
+                document.getElementById('plaidStatus').textContent = health.services.plaid ? '🟢' : '🟡';
+                document.getElementById('keyVaultStatus').textContent = health.services.keyVault ? '🟢' : '🔴';
+            } catch (error) {
+                console.error('Health check failed:', error);
+            }
+        }
+
+        // Create demo chart
+        function createDemoChart() {
+            const ctx = document.getElementById('demoChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Food & Dining', 'Transportation', 'Shopping', 'Bills', 'Entertainment'],
+                    datasets: [{
+                        data: [25, 15, 20, 30, 10],
+                        backgroundColor: [
+                            '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFEAA7', '#96CEB4'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        function testBankConnection() {
+            alert('Bank integration requires Plaid API credentials.\n\n1. Sign up at dashboard.plaid.com\n2. Add credentials to Azure Key Vault\n3. Configure environment variables');
+        }
+
+        function showBudgetDemo() {
+            alert('Budget Management Features:\n\n✅ Set monthly spending limits\n✅ Track progress in real-time\n✅ Get alerts when approaching limits\n✅ Analyze spending patterns\n✅ Set and track financial goals');
+        }
+
+        async function runMigrations() {
+            try {
+                const response = await fetch('/api/migrate', { method: 'POST' });
+                if (response.ok) {
+                    alert('✅ Database migration completed successfully!');
+                } else {
+                    alert('❌ Migration failed. Check server logs.');
+                }
+            } catch (error) {
+                alert('❌ Migration failed: ' + error.message);
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            checkHealth();
+            createDemoChart();
+        });
+    </script>
+</body>
+</html> 
