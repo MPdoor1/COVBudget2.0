@@ -43,7 +43,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       styleSrcElem: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
       styleSrcAttr: ["'unsafe-inline'"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+              fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'", "https://production.plaid.com", "https://sandbox.plaid.com"],
       frameSrc: ["'self'", "https://cdn.plaid.com"],
@@ -1073,18 +1073,27 @@ app.get('/api/user/spending-summary', authenticateToken, async (req, res) => {
 app.post('/api/migrate', async (req, res) => {
   try {
     console.log('Starting database migration...');
+    
+    // Check if migration script exists
+    const path = require('path');
+    const migrationPath = path.join(__dirname, 'scripts', 'migrate.js');
+    console.log('Migration script path:', migrationPath);
+    
     const { runMigrations } = require('./scripts/migrate');
     await runMigrations();
     console.log('Database migration completed successfully!');
+    
     res.json({ 
       success: true, 
       message: 'Database migration completed successfully!' 
     });
   } catch (error) {
     console.error('Migration failed:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({ 
       success: false, 
-      error: error.message 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
