@@ -595,6 +595,10 @@
             max-width: 500px;
             border: 1px solid rgba(255, 107, 53, 0.2);
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            user-select: text;
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
         }
 
         .modal-header {
@@ -632,6 +636,10 @@
             color: var(--text-light);
             font-size: 1rem;
             transition: all 0.3s ease;
+            user-select: text;
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
         }
 
         .form-group input:focus {
@@ -1436,11 +1444,17 @@ Start by uploading your bank statements to see personalized budget recommendatio
              }, 5000);
          }
 
-         // Close modal when clicking outside
+         // Close modal when clicking outside (but not when selecting text)
          window.addEventListener('click', function(event) {
+             // Don't close modal if user is selecting text
+             if (window.getSelection().toString().length > 0) {
+                 return;
+             }
+             
              const loginModal = document.getElementById('loginModal');
              const signupModal = document.getElementById('signupModal');
              
+             // Only close if clicking directly on the modal backdrop, not on child elements
              if (event.target === loginModal) {
                  closeModal('loginModal');
              }
