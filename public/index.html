@@ -20,7 +20,9 @@
             --text-light: #FFF8DC;
             --text-muted: #B8860B;
             --accent-gold: #FFD700;
-            --success-green: #32CD32;
+            --success-orange: #FF8C42;
+            --warning-amber: #FFA500;
+            --error-red: #DC143C;
             --shadow-orange: rgba(255, 107, 53, 0.3);
             --gradient-primary: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange));
             --gradient-bg: linear-gradient(135deg, var(--dark-bg) 0%, var(--dark-brown) 50%, var(--light-brown) 100%);
@@ -84,9 +86,9 @@
             width: 12px;
             height: 12px;
             border-radius: 50%;
-            background: var(--success-green);
+            background: var(--success-orange);
             animation: pulse 2s infinite;
-            box-shadow: 0 0 10px var(--success-green);
+            box-shadow: 0 0 10px var(--success-orange);
         }
 
         /* Hero Section */
@@ -410,15 +412,15 @@
         }
 
         .status-message.success {
-            background: rgba(50, 205, 50, 0.1);
-            border: 1px solid var(--success-green);
-            color: var(--success-green);
+            background: rgba(255, 140, 66, 0.1);
+            border: 1px solid var(--success-orange);
+            color: var(--success-orange);
         }
 
         .status-message.error {
-            background: rgba(255, 69, 58, 0.1);
-            border: 1px solid #FF453A;
-            color: #FF453A;
+            background: rgba(220, 20, 60, 0.1);
+            border: 1px solid var(--error-red);
+            color: var(--error-red);
         }
 
         .status-message.info {
@@ -520,6 +522,134 @@
         .hidden {
             display: none;
         }
+
+        /* Authentication Styles */
+        .auth-buttons {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .user-menu {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .user-menu span {
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            margin: 5% auto;
+            padding: 3rem;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 500px;
+            border: 1px solid rgba(255, 107, 53, 0.2);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .modal-header h2 {
+            font-family: 'Roboto Slab', serif;
+            color: var(--text-light);
+            margin-bottom: 0.5rem;
+        }
+
+        .modal-header p {
+            color: var(--text-muted);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid rgba(255, 107, 53, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 107, 53, 0.05);
+            color: var(--text-light);
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-orange);
+            background: rgba(255, 107, 53, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 1rem;
+            right: 1.5rem;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .close-modal:hover {
+            color: var(--primary-orange);
+        }
+
+        .auth-toggle {
+            text-align: center;
+            margin-top: 1.5rem;
+            color: var(--text-muted);
+        }
+
+        .auth-toggle a {
+            color: var(--primary-orange);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .auth-toggle a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -529,10 +659,18 @@
             <div class="logo">
                 <i class="fas fa-wallet"></i> COVBudget 2.0
             </div>
-            <div class="nav-status">
-                <span class="status-dot" id="statusIndicator"></span>
-                <span id="statusText">System Online</span>
-            </div>
+                         <div class="nav-status">
+                 <span class="status-dot" id="statusIndicator"></span>
+                 <span id="statusText">System Online</span>
+                 <div class="auth-buttons" id="authButtons">
+                     <button class="btn btn-secondary" onclick="showLoginModal()">Login</button>
+                     <button class="btn" onclick="showSignupModal()">Sign Up</button>
+                 </div>
+                 <div class="user-menu" id="userMenu" style="display: none;">
+                     <span id="userName">Welcome!</span>
+                     <button class="btn btn-secondary" onclick="logout()">Logout</button>
+                 </div>
+             </div>
         </div>
     </nav>
 
@@ -707,10 +845,77 @@
                     <i class="fas fa-database"></i> Run DB Migration
                 </button>
             </div>
-        </div>
-    </div>
+                 </div>
+     </div>
 
-    <script>
+     <!-- Authentication Modals -->
+     <div id="loginModal" class="modal">
+         <div class="modal-content">
+             <button class="close-modal" onclick="closeModal('loginModal')">&times;</button>
+             <div class="modal-header">
+                 <h2><i class="fas fa-sign-in-alt"></i> Welcome Back</h2>
+                 <p>Sign in to access your financial dashboard</p>
+             </div>
+             <form id="loginForm">
+                 <div class="form-group">
+                     <label for="loginEmail">Email Address</label>
+                     <input type="email" id="loginEmail" name="email" placeholder="Enter your email" required>
+                 </div>
+                 <div class="form-group">
+                     <label for="loginPassword">Password</label>
+                     <input type="password" id="loginPassword" name="password" placeholder="Enter your password" required>
+                 </div>
+                 <div class="modal-buttons">
+                     <button type="submit" class="btn">
+                         <i class="fas fa-sign-in-alt"></i> Sign In
+                     </button>
+                     <button type="button" class="btn btn-secondary" onclick="closeModal('loginModal')">Cancel</button>
+                 </div>
+             </form>
+             <div class="auth-toggle">
+                 Don't have an account? <a onclick="switchToSignup()">Sign up here</a>
+             </div>
+         </div>
+     </div>
+
+     <div id="signupModal" class="modal">
+         <div class="modal-content">
+             <button class="close-modal" onclick="closeModal('signupModal')">&times;</button>
+             <div class="modal-header">
+                 <h2><i class="fas fa-user-plus"></i> Create Account</h2>
+                 <p>Join COVBudget to start managing your finances</p>
+             </div>
+             <form id="signupForm">
+                 <div class="form-group">
+                     <label for="signupName">Full Name</label>
+                     <input type="text" id="signupName" name="name" placeholder="Enter your full name" required>
+                 </div>
+                 <div class="form-group">
+                     <label for="signupEmail">Email Address</label>
+                     <input type="email" id="signupEmail" name="email" placeholder="Enter your email" required>
+                 </div>
+                 <div class="form-group">
+                     <label for="signupPassword">Password</label>
+                     <input type="password" id="signupPassword" name="password" placeholder="Create a password (min 8 characters)" required minlength="8">
+                 </div>
+                 <div class="form-group">
+                     <label for="signupConfirmPassword">Confirm Password</label>
+                     <input type="password" id="signupConfirmPassword" name="confirmPassword" placeholder="Confirm your password" required>
+                 </div>
+                 <div class="modal-buttons">
+                     <button type="submit" class="btn">
+                         <i class="fas fa-user-plus"></i> Create Account
+                     </button>
+                     <button type="button" class="btn btn-secondary" onclick="closeModal('signupModal')">Cancel</button>
+                 </div>
+             </form>
+             <div class="auth-toggle">
+                 Already have an account? <a onclick="switchToLogin()">Sign in here</a>
+             </div>
+         </div>
+     </div>
+
+     <script>
         // System health monitoring
         async function checkHealth() {
             try {
@@ -722,18 +927,18 @@
                 document.getElementById('keyVaultStatus').textContent = health.services.keyVault ? '🟢' : '🔴';
                 document.getElementById('apiStatus').textContent = health.services.plaid ? '🟢' : '🟡';
                 
-                // Update main status
-                const allHealthy = health.services.database && health.services.keyVault;
-                document.getElementById('statusIndicator').style.background = allHealthy ? 'var(--success-green)' : '#ffc107';
-                document.getElementById('statusText').textContent = allHealthy ? 'All Systems Online' : 'Partial Service';
+                                 // Update main status
+                 const allHealthy = health.services.database && health.services.keyVault;
+                 document.getElementById('statusIndicator').style.background = allHealthy ? '#FF8C42' : '#FFA500';
+                 document.getElementById('statusText').textContent = allHealthy ? 'All Systems Online' : 'Partial Service';
                 
             } catch (error) {
                 console.error('Health check failed:', error);
                 document.getElementById('dbStatus').textContent = '🔴';
                 document.getElementById('keyVaultStatus').textContent = '🔴';
                 document.getElementById('apiStatus').textContent = '🔴';
-                document.getElementById('statusIndicator').style.background = '#dc3545';
-                document.getElementById('statusText').textContent = 'System Offline';
+                                 document.getElementById('statusIndicator').style.background = '#DC143C';
+                 document.getElementById('statusText').textContent = 'System Offline';
             }
         }
 
@@ -753,7 +958,7 @@
                                      '#F7931E', 
                                      '#D2691E',
                                      '#FFD700',
-                                     '#32CD32'
+                                     '#FF8C42'
                                  ],
                                  borderWidth: 3,
                                  borderColor: '#1A0F0A'
@@ -804,9 +1009,17 @@
         }
 
         // File upload handling
-        function handleStatementUpload(event) {
+        async function handleStatementUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
+
+            // Check if user is authenticated
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                showErrorMessage('Please log in to upload bank statements');
+                showLoginModal();
+                return;
+            }
 
             const statusDiv = document.getElementById('uploadStatus');
             statusDiv.innerHTML = `
@@ -819,24 +1032,53 @@
                 </div>
             `;
 
-            // Simulate upload process
-            setTimeout(() => {
-                const transactionCount = Math.floor(Math.random() * 200) + 50;
-                const categories = Math.floor(Math.random() * 8) + 5;
+            try {
+                const formData = new FormData();
+                formData.append('statement', file);
                 
+                const response = await fetch('/api/upload-statement', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    statusDiv.innerHTML = `
+                        <div class="status-message success">
+                            <i class="fas fa-check-circle" style="font-size: 1.5rem;"></i>
+                            <div>
+                                <strong>Upload Successful!</strong><br>
+                                Processed ${result.transactionCount} transactions from ${result.accountName}<br>
+                                Date range: ${result.dateRange}
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Update chart with new data
+                    updateDemoChart();
+                    
+                    // Show success message
+                    showSuccessMessage(`Successfully uploaded ${result.transactionCount} transactions!`);
+                } else {
+                    throw new Error(result.error || 'Upload failed');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
                 statusDiv.innerHTML = `
-                    <div class="status-message success">
-                        <i class="fas fa-check-circle" style="font-size: 1.5rem;"></i>
+                    <div class="status-message error">
+                        <i class="fas fa-exclamation-circle" style="font-size: 1.5rem;"></i>
                         <div>
-                            <strong>Upload Successful!</strong><br>
-                            Processed ${transactionCount} transactions across ${categories} categories
+                            <strong>Upload Failed</strong><br>
+                            ${error.message || 'Please try again or check your file format'}
                         </div>
                     </div>
                 `;
-                
-                // Update chart with new data
-                updateDemoChart();
-            }, 3000);
+                showErrorMessage('Upload failed: ' + (error.message || 'Please try again'));
+            }
         }
 
                  // Drag and drop functionality
@@ -928,13 +1170,24 @@ Start by uploading your bank statements to see personalized budget recommendatio
             const button = event.target;
             const originalText = button.innerHTML;
             
+            // Check if user is authenticated
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                showErrorMessage('Please log in to run database migrations');
+                showLoginModal();
+                return;
+            }
+            
             try {
                 button.innerHTML = '<div class="loading"></div> Running Migration...';
                 button.disabled = true;
                 
                 const response = await fetch('/api/migrate', { 
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
                 });
                 
                 const result = await response.json();
@@ -972,11 +1225,205 @@ Start by uploading your bank statements to see personalized budget recommendatio
             }
         }
 
-                 // Initialize on page load
+                 // Authentication Functions
+         let currentUser = null;
+
+         function showLoginModal() {
+             document.getElementById('loginModal').style.display = 'block';
+         }
+
+         function showSignupModal() {
+             document.getElementById('signupModal').style.display = 'block';
+         }
+
+         function closeModal(modalId) {
+             document.getElementById(modalId).style.display = 'none';
+         }
+
+         function switchToSignup() {
+             closeModal('loginModal');
+             showSignupModal();
+         }
+
+         function switchToLogin() {
+             closeModal('signupModal');
+             showLoginModal();
+         }
+
+         // Handle login form submission
+         document.addEventListener('DOMContentLoaded', function() {
+             document.getElementById('loginForm').addEventListener('submit', async function(e) {
+                 e.preventDefault();
+                 
+                 const email = document.getElementById('loginEmail').value;
+                 const password = document.getElementById('loginPassword').value;
+                 
+                 try {
+                     const response = await fetch('/api/auth/login', {
+                         method: 'POST',
+                         headers: {
+                             'Content-Type': 'application/json'
+                         },
+                         body: JSON.stringify({ email, password })
+                     });
+                     
+                     const result = await response.json();
+                     
+                     if (response.ok) {
+                         localStorage.setItem('authToken', result.token);
+                         localStorage.setItem('userData', JSON.stringify(result.user));
+                         currentUser = result.user;
+                         updateAuthUI();
+                         closeModal('loginModal');
+                         showSuccessMessage('Welcome back! Successfully logged in.');
+                     } else {
+                         showErrorMessage(result.error || 'Login failed');
+                     }
+                 } catch (error) {
+                     console.error('Login error:', error);
+                     showErrorMessage('Login failed. Please try again.');
+                 }
+             });
+
+             // Handle signup form submission
+             document.getElementById('signupForm').addEventListener('submit', async function(e) {
+                 e.preventDefault();
+                 
+                 const name = document.getElementById('signupName').value;
+                 const email = document.getElementById('signupEmail').value;
+                 const password = document.getElementById('signupPassword').value;
+                 const confirmPassword = document.getElementById('signupConfirmPassword').value;
+                 
+                 if (password !== confirmPassword) {
+                     showErrorMessage('Passwords do not match');
+                     return;
+                 }
+                 
+                 try {
+                     const response = await fetch('/api/auth/register', {
+                         method: 'POST',
+                         headers: {
+                             'Content-Type': 'application/json'
+                         },
+                         body: JSON.stringify({ name, email, password })
+                     });
+                     
+                     const result = await response.json();
+                     
+                     if (response.ok) {
+                         localStorage.setItem('authToken', result.token);
+                         localStorage.setItem('userData', JSON.stringify(result.user));
+                         currentUser = result.user;
+                         updateAuthUI();
+                         closeModal('signupModal');
+                         showSuccessMessage('Account created successfully! Welcome to COVBudget.');
+                     } else {
+                         showErrorMessage(result.error || 'Registration failed');
+                     }
+                 } catch (error) {
+                     console.error('Registration error:', error);
+                     showErrorMessage('Registration failed. Please try again.');
+                 }
+             });
+         });
+
+         function logout() {
+             localStorage.removeItem('authToken');
+             localStorage.removeItem('userData');
+             currentUser = null;
+             updateAuthUI();
+             showSuccessMessage('Successfully logged out');
+         }
+
+         function updateAuthUI() {
+             const authButtons = document.getElementById('authButtons');
+             const userMenu = document.getElementById('userMenu');
+             const userName = document.getElementById('userName');
+             
+             if (currentUser) {
+                 authButtons.style.display = 'none';
+                 userMenu.style.display = 'flex';
+                 userName.textContent = `Welcome, ${currentUser.name}!`;
+             } else {
+                 authButtons.style.display = 'flex';
+                 userMenu.style.display = 'none';
+             }
+         }
+
+         function checkAuthStatus() {
+             const token = localStorage.getItem('authToken');
+             const userData = localStorage.getItem('userData');
+             
+             if (token && userData) {
+                 try {
+                     currentUser = JSON.parse(userData);
+                     updateAuthUI();
+                 } catch (error) {
+                     console.error('Error parsing user data:', error);
+                     logout();
+                 }
+             }
+         }
+
+         function showSuccessMessage(message) {
+             const messageDiv = document.createElement('div');
+             messageDiv.className = 'status-message success';
+             messageDiv.innerHTML = `
+                 <i class="fas fa-check-circle" style="font-size: 1.5rem;"></i>
+                 <div><strong>${message}</strong></div>
+             `;
+             messageDiv.style.position = 'fixed';
+             messageDiv.style.top = '100px';
+             messageDiv.style.right = '20px';
+             messageDiv.style.zIndex = '3000';
+             messageDiv.style.maxWidth = '400px';
+             
+             document.body.appendChild(messageDiv);
+             
+             setTimeout(() => {
+                 messageDiv.remove();
+             }, 5000);
+         }
+
+         function showErrorMessage(message) {
+             const messageDiv = document.createElement('div');
+             messageDiv.className = 'status-message error';
+             messageDiv.innerHTML = `
+                 <i class="fas fa-exclamation-circle" style="font-size: 1.5rem;"></i>
+                 <div><strong>${message}</strong></div>
+             `;
+             messageDiv.style.position = 'fixed';
+             messageDiv.style.top = '100px';
+             messageDiv.style.right = '20px';
+             messageDiv.style.zIndex = '3000';
+             messageDiv.style.maxWidth = '400px';
+             
+             document.body.appendChild(messageDiv);
+             
+             setTimeout(() => {
+                 messageDiv.remove();
+             }, 5000);
+         }
+
+         // Close modal when clicking outside
+         window.addEventListener('click', function(event) {
+             const loginModal = document.getElementById('loginModal');
+             const signupModal = document.getElementById('signupModal');
+             
+             if (event.target === loginModal) {
+                 closeModal('loginModal');
+             }
+             if (event.target === signupModal) {
+                 closeModal('signupModal');
+             }
+         });
+
+         // Initialize on page load
          document.addEventListener('DOMContentLoaded', function() {
              console.log('🚀 COVBudget 2.0 Loading...');
              
              // Initialize core functions
+             checkAuthStatus();
              checkHealth();
              setupDragAndDrop();
              

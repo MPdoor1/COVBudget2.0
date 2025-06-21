@@ -491,8 +491,8 @@ const upload = multer({
   }
 });
 
-// Bank statement upload endpoint
-app.post('/api/upload-statement', upload.single('statement'), async (req, res) => {
+// Bank statement upload endpoint (requires authentication)
+app.post('/api/upload-statement', authenticateToken, upload.single('statement'), async (req, res) => {
   try {
     if (!dbClient) {
       return res.status(503).json({ error: 'Database not available' });
@@ -535,11 +535,11 @@ app.post('/api/upload-statement', upload.single('statement'), async (req, res) =
       const institutionId = institutionResult.rows[0].id;
 
       const accountResult = await dbClient.query(`
-        INSERT INTO accounts (institution_id, account_name, account_type, currency_code, is_active)
-        VALUES ($1, $2, 'depository', 'USD', true)
-        ON CONFLICT (institution_id, account_name) DO UPDATE SET account_name = EXCLUDED.account_name
+        INSERT INTO accounts (user_id, institution_id, account_name, account_type, currency_code, is_active)
+        VALUES ($1, $2, $3, 'depository', 'USD', true)
+        ON CONFLICT (user_id, institution_id, account_name) DO UPDATE SET account_name = EXCLUDED.account_name
         RETURNING id
-      `, [institutionId, accountName]);
+      `, [req.user.userId, institutionId, accountName]);
 
       const accountId = accountResult.rows[0].id;
 
@@ -769,8 +769,199 @@ function extractMerchant(description) {
   return parts.slice(0, 2).join(' '); // Take first two words
 }
 
+// === AUTHENTICATION ENDPOINTS ===
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    
+    // Validation
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+    
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    }
+    
+    // Check if user already exists
+    const existingUser = await query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ error: 'User already exists with this email' });
+    }
+    
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
+    
+    // Create user
+    const result = await query(
+      'INSERT INTO users (name, email, password_hash, created_at) VALUES ($1, $2, $3, NOW()) RETURNING id, name, email, created_at',
+      [name, email, hashedPassword]
+    );
+    
+    const user = result.rows[0];
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '7d' }
+    );
+    
+    res.status(201).json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.created_at
+      }
+    });
+    
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Validation
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    
+    // Find user
+    const result = await query('SELECT * FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    
+    const user = result.rows[0];
+    
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    
+    // Update last login
+    await query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '7d' }
+    );
+    
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.created_at,
+        lastLogin: new Date()
+      }
+    });
+    
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+
+
+// === USER DATA ENDPOINTS ===
+app.get('/api/user/transactions', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { limit = 50, offset = 0 } = req.query;
+    
+    const result = await query(`
+      SELECT t.*, a.account_name, i.name as institution_name
+      FROM transactions t
+      JOIN accounts a ON t.account_id = a.id
+      JOIN institutions i ON a.institution_id = i.id
+      WHERE a.user_id = $1
+      ORDER BY t.date DESC
+      LIMIT $2 OFFSET $3
+    `, [userId, limit, offset]);
+    
+    res.json({
+      success: true,
+      transactions: result.rows,
+      count: result.rows.length
+    });
+  } catch (error) {
+    console.error('Error fetching user transactions:', error);
+    res.status(500).json({ error: 'Failed to fetch transactions' });
+  }
+});
+
+app.get('/api/user/accounts', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    const result = await query(`
+      SELECT a.*, i.name as institution_name,
+             COUNT(t.id) as transaction_count,
+             COALESCE(SUM(t.amount), 0) as balance
+      FROM accounts a
+      JOIN institutions i ON a.institution_id = i.id
+      LEFT JOIN transactions t ON a.id = t.account_id
+      WHERE a.user_id = $1
+      GROUP BY a.id, i.name
+      ORDER BY a.created_at DESC
+    `, [userId]);
+    
+    res.json({
+      success: true,
+      accounts: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching user accounts:', error);
+    res.status(500).json({ error: 'Failed to fetch accounts' });
+  }
+});
+
+app.get('/api/user/spending-summary', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { months = 3 } = req.query;
+    
+    const result = await query(`
+      SELECT 
+        t.category_primary,
+        COUNT(*) as transaction_count,
+        SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount) ELSE 0 END) as total_spent,
+        SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END) as total_income
+      FROM transactions t
+      JOIN accounts a ON t.account_id = a.id
+      WHERE a.user_id = $1 
+        AND t.date >= NOW() - INTERVAL '${months} months'
+      GROUP BY t.category_primary
+      ORDER BY total_spent DESC
+    `, [userId]);
+    
+    res.json({
+      success: true,
+      summary: result.rows,
+      period: `${months} months`
+    });
+  } catch (error) {
+    console.error('Error fetching spending summary:', error);
+    res.status(500).json({ error: 'Failed to fetch spending summary' });
+  }
+});
+
 // === MIGRATION ENDPOINT ===
-app.post('/api/migrate', async (req, res) => {
+app.post('/api/migrate', authenticateToken, async (req, res) => {
   try {
     const { runMigrations } = require('./scripts/migrate');
     await runMigrations();
