@@ -222,8 +222,8 @@ async function insertDefaultData(client) {
     const cat = defaultCategories[i];
     await client.query(`
       INSERT INTO budget_categories (user_id, name, description, color_hex, icon, is_expense, sort_order)
-      SELECT '00000000-0000-0000-0000-000000000000'::uuid, $1, $2, $3, $4, $5, $6
-      WHERE NOT EXISTS (SELECT 1 FROM budget_categories WHERE name = $1 AND user_id = '00000000-0000-0000-0000-000000000000'::uuid)
+      SELECT '00000000-0000-0000-0000-000000000000'::uuid, $1::VARCHAR, $2::TEXT, $3::VARCHAR, $4::VARCHAR, $5::BOOLEAN, $6::INTEGER
+      WHERE NOT EXISTS (SELECT 1 FROM budget_categories WHERE name = $1::VARCHAR AND user_id = '00000000-0000-0000-0000-000000000000'::uuid)
     `, [cat.name, cat.description, cat.color_hex, cat.icon, cat.is_expense, i]);
   }
   
