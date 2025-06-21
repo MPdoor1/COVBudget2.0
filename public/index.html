@@ -201,6 +201,7 @@
         <div class="demo-section">
             <h2>🎉 Deployment Successful!</h2>
             <p>Your budgeting app is live and ready for bank integration</p>
+            <button class="btn" onclick="alert('JavaScript is working! ✅'); console.log('Test button works!');" style="margin: 1rem 0; background: #28a745;">🧪 Test JavaScript</button>
             <div class="stats-grid" style="margin-top: 2rem;">
                 <div class="stat-item">
                     <div class="stat-number" id="serverStatus">🟢</div>
@@ -219,6 +220,7 @@
                     <div class="stat-label">Key Vault</div>
                 </div>
             </div>
+            <button class="btn" onclick="window.open('/health', '_blank'); return false;" onmousedown="console.log('Health Check button clicked')" style="margin-top: 1rem;">View Health Check</button>
         </div>
 
         <div class="dashboard-grid">
@@ -231,7 +233,7 @@
                     <li>Automatic categorization</li>
                     <li>Multi-account management</li>
                 </ul>
-                <button class="btn" onclick="testBankConnection()" style="margin-top: 1rem;">Test Bank Integration</button>
+                <button class="btn" onclick="testBankConnection(); return false;" onmousedown="console.log('Test Bank button clicked')" style="margin-top: 1rem;">Test Bank Integration</button>
             </div>
 
             <div class="card">
@@ -255,7 +257,7 @@
                     <li>Goal setting & tracking</li>
                     <li>Transaction rules</li>
                 </ul>
-                <button class="btn" onclick="showBudgetDemo()" style="margin-top: 1rem;">View Budget Demo</button>
+                <button class="btn" onclick="showBudgetDemo(); return false;" onmousedown="console.log('Budget Demo button clicked')" style="margin-top: 1rem;">View Budget Demo</button>
             </div>
 
             <div class="card">
@@ -283,7 +285,7 @@
                 <div class="api-endpoint">
                     <span class="endpoint-method">GET</span>/api/analytics/spending
                 </div>
-                <button class="btn" onclick="window.open('/health', '_blank')" style="margin-top: 1rem;">View Health Check</button>
+                <button class="btn" onclick="window.open('/health', '_blank'); return false;" onmousedown="console.log('Health Check button clicked')" style="margin-top: 1rem;">View Health Check</button>
             </div>
 
             <div class="card">
@@ -295,7 +297,7 @@
                     <li>Connect your first bank account</li>
                     <li>Start tracking your finances!</li>
                 </ul>
-                <button class="btn" onclick="runMigrations()" style="margin-top: 1rem;">Run DB Migration</button>
+                <button class="btn" onclick="runMigrations(); return false;" onmousedown="console.log('Migration button clicked')" style="margin-top: 1rem;">Run DB Migration</button>
             </div>
         </div>
     </div>
