@@ -45,6 +45,35 @@ jobs:
       with:
         name: node-app
 
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Configure App Settings
+      uses: azure/appservice-settings@v1
+      with:
+        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+        app-settings-json: |
+          [
+            {
+              "name": "PLAID_CLIENT_ID",
+              "value": "${{ secrets.PLAID_CLIENT_ID }}"
+            },
+            {
+              "name": "PLAID_SECRET", 
+              "value": "${{ secrets.PLAID_SECRET }}"
+            },
+            {
+              "name": "PLAID_ENV",
+              "value": "${{ secrets.PLAID_ENV }}"
+            },
+            {
+              "name": "NODE_ENV",
+              "value": "production"
+            }
+          ]
+
     - name: 'Deploy to Azure Web App'
       id: deploy-to-webapp
       uses: azure/webapps-deploy@v2
