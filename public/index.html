@@ -225,15 +225,20 @@
 
         <div class="dashboard-grid">
             <div class="card">
-                <h3>🏦 Banking Integration Features</h3>
+                <h3>📄 Bank Statement Upload</h3>
                 <ul class="feature-list">
-                    <li>Connect 12,000+ banks via Plaid</li>
-                    <li>Real-time transaction sync</li>
-                    <li>Account balance monitoring</li>
-                    <li>Automatic categorization</li>
-                    <li>Multi-account management</li>
+                    <li>Upload CSV/Excel bank statements</li>
+                    <li>Automatic transaction parsing</li>
+                    <li>Smart categorization</li>
+                    <li>Multiple account support</li>
+                    <li>Privacy-focused (no API access)</li>
                 </ul>
-                <button class="btn" onclick="testBankConnection(); return false;" onmousedown="console.log('Test Bank button clicked')" style="margin-top: 1rem;">Test Bank Integration</button>
+                <div style="margin-top: 1rem;">
+                    <input type="file" id="statementUpload" accept=".csv,.xlsx,.xls" style="display: none;" onchange="handleStatementUpload(event)">
+                    <button class="btn" onclick="document.getElementById('statementUpload').click()" style="margin-right: 0.5rem;">📁 Upload Statement</button>
+                    <button class="btn" onclick="showUploadHelp()" style="background: #17a2b8;">❓ Format Help</button>
+                </div>
+                <div id="uploadStatus" style="margin-top: 1rem; font-size: 0.9rem;"></div>
             </div>
 
             <div class="card">
@@ -274,7 +279,7 @@
             <div class="card">
                 <h3>🛠️ API Endpoints</h3>
                 <div class="api-endpoint">
-                    <span class="endpoint-method">POST</span>/api/plaid/link-token
+                    <span class="endpoint-method">POST</span>/api/upload-statement
                 </div>
                 <div class="api-endpoint">
                     <span class="endpoint-method">GET</span>/api/accounts
@@ -291,10 +296,10 @@
             <div class="card">
                 <h3>🚀 Next Steps</h3>
                 <ul class="feature-list">
-                    <li>Set up Plaid API credentials</li>
                     <li>Run database migrations</li>
-                    <li>Configure frontend application</li>
-                    <li>Connect your first bank account</li>
+                    <li>Upload your bank statements</li>
+                    <li>Review categorized transactions</li>
+                    <li>Set up budget categories</li>
                     <li>Start tracking your finances!</li>
                 </ul>
                 <button class="btn" onclick="runMigrations(); return false;" onmousedown="console.log('Migration button clicked')" style="margin-top: 1rem;">Run DB Migration</button>
@@ -395,6 +400,49 @@
                 button.textContent = originalText;
                 button.disabled = false;
             }
+        }
+
+        // Bank Statement Upload Functions
+        async function handleStatementUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const statusDiv = document.getElementById('uploadStatus');
+            statusDiv.innerHTML = '<span style="color: #667eea;">📤 Uploading and processing...</span>';
+
+            try {
+                const formData = new FormData();
+                formData.append('statement', file);
+                formData.append('accountName', prompt('Enter account name (e.g., "Checking Account"):') || 'Unknown Account');
+
+                const response = await fetch('/api/upload-statement', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    statusDiv.innerHTML = `<span style="color: #28a745;">✅ Success! Processed ${result.transactionCount} transactions from ${file.name}</span>`;
+                    
+                    // Show summary
+                    setTimeout(() => {
+                        alert(`📊 Statement Upload Complete!\n\n• File: ${file.name}\n• Transactions: ${result.transactionCount}\n• Date Range: ${result.dateRange || 'Unknown'}\n• Categories: Auto-assigned\n\nYou can now view your transactions and spending analysis!`);
+                    }, 500);
+                } else {
+                    statusDiv.innerHTML = `<span style="color: #dc3545;">❌ Upload failed: ${result.error}</span>`;
+                }
+            } catch (error) {
+                console.error('Upload failed:', error);
+                statusDiv.innerHTML = `<span style="color: #dc3545;">❌ Upload failed: ${error.message}</span>`;
+            }
+
+            // Clear file input
+            event.target.value = '';
+        }
+
+        function showUploadHelp() {
+            alert(`📄 Bank Statement Upload Help\n\n✅ Supported Formats:\n• CSV files (.csv)\n• Excel files (.xlsx, .xls)\n\n✅ Required Columns:\n• Date (MM/DD/YYYY or DD/MM/YYYY)\n• Description/Memo\n• Amount (positive for income, negative for expenses)\n\n✅ Optional Columns:\n• Category\n• Account\n• Reference/Check Number\n\n✅ Example CSV Format:\nDate,Description,Amount\n01/15/2024,Grocery Store,-85.32\n01/16/2024,Salary Deposit,2500.00\n01/17/2024,Gas Station,-45.67\n\n💡 Tips:\n• Most bank CSV exports work directly\n• Amounts: Use negative for expenses, positive for income\n• The app will auto-categorize transactions\n• You can upload multiple statements\n\n🔒 Privacy: Files are processed locally and securely stored in your database.`);
         }
 
         // Initialize on page load

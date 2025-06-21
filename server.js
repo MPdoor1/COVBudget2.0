@@ -2,6 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const multer = require('multer');
+const csv = require('csv-parser');
+const xlsx = require('xlsx');
+const fs = require('fs');
+const path = require('path');
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 const { SecretClient } = require('@azure/keyvault-secrets');
 const { DefaultAzureCredential } = require('@azure/identity');
@@ -468,6 +473,301 @@ app.get('/api/analytics/spending', authenticateToken, async (req, res) => {
          res.status(500).json({ error: 'Failed to get analytics' });
    }
  });
+
+// === FILE UPLOAD CONFIGURATION ===
+const upload = multer({
+  dest: 'uploads/',
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['.csv', '.xlsx', '.xls'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedTypes.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only CSV and Excel files are allowed'), false);
+    }
+  }
+});
+
+// Bank statement upload endpoint
+app.post('/api/upload-statement', upload.single('statement'), async (req, res) => {
+  try {
+    if (!dbClient) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const { accountName = 'Unknown Account' } = req.body;
+    const filePath = req.file.path;
+    const fileName = req.file.originalname;
+    const fileExt = path.extname(fileName).toLowerCase();
+
+    console.log(`Processing statement upload: ${fileName}`);
+
+    let transactions = [];
+
+    try {
+      if (fileExt === '.csv') {
+        // Parse CSV file
+        transactions = await parseCSVFile(filePath);
+      } else if (fileExt === '.xlsx' || fileExt === '.xls') {
+        // Parse Excel file
+        transactions = await parseExcelFile(filePath);
+      }
+
+      if (transactions.length === 0) {
+        throw new Error('No valid transactions found in file');
+      }
+
+      // Create or get institution and account
+      const institutionResult = await dbClient.query(`
+        INSERT INTO institutions (name, country) 
+        VALUES ($1, 'US') 
+        ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+        RETURNING id
+      `, [accountName]);
+
+      const institutionId = institutionResult.rows[0].id;
+
+      const accountResult = await dbClient.query(`
+        INSERT INTO accounts (institution_id, account_name, account_type, currency_code, is_active)
+        VALUES ($1, $2, 'depository', 'USD', true)
+        ON CONFLICT (institution_id, account_name) DO UPDATE SET account_name = EXCLUDED.account_name
+        RETURNING id
+      `, [institutionId, accountName]);
+
+      const accountId = accountResult.rows[0].id;
+
+      // Insert transactions
+      let insertedCount = 0;
+      for (const transaction of transactions) {
+        try {
+          await dbClient.query(`
+            INSERT INTO transactions (
+              account_id, transaction_id, amount, date, name, 
+              category_primary, category_detailed, merchant_name, 
+              account_owner, iso_currency_code, unofficial_currency_code,
+              created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+            ON CONFLICT (account_id, transaction_id) DO NOTHING
+          `, [
+            accountId,
+            `upload_${Date.now()}_${insertedCount}`, // Unique transaction ID
+            transaction.amount,
+            transaction.date,
+            transaction.description,
+            transaction.category || 'Other',
+            transaction.category || 'Other',
+            transaction.merchant || null,
+            null, // account_owner
+            'USD',
+            null,
+          ]);
+          insertedCount++;
+        } catch (txError) {
+          console.warn(`Failed to insert transaction: ${txError.message}`);
+        }
+      }
+
+      // Get date range for summary
+      const dates = transactions.map(t => t.date).sort();
+      const dateRange = dates.length > 0 ? 
+        `${dates[0]} to ${dates[dates.length - 1]}` : 'Unknown';
+
+      res.json({
+        success: true,
+        transactionCount: insertedCount,
+        totalParsed: transactions.length,
+        accountName: accountName,
+        dateRange: dateRange,
+        message: `Successfully processed ${insertedCount} transactions`
+      });
+
+    } catch (parseError) {
+      console.error('File parsing error:', parseError);
+      res.status(400).json({ 
+        error: `Failed to parse file: ${parseError.message}` 
+      });
+    } finally {
+      // Clean up uploaded file
+      try {
+        fs.unlinkSync(filePath);
+      } catch (cleanupError) {
+        console.warn('Failed to cleanup uploaded file:', cleanupError.message);
+      }
+    }
+
+  } catch (error) {
+    console.error('Statement upload error:', error);
+    res.status(500).json({ error: 'Failed to process statement upload' });
+  }
+});
+
+// Helper function to parse CSV files
+function parseCSVFile(filePath) {
+  return new Promise((resolve, reject) => {
+    const transactions = [];
+    
+    fs.createReadStream(filePath)
+      .pipe(csv())
+      .on('data', (row) => {
+        try {
+          const transaction = parseTransactionRow(row);
+          if (transaction) {
+            transactions.push(transaction);
+          }
+        } catch (error) {
+          console.warn('Failed to parse row:', error.message);
+        }
+      })
+      .on('end', () => {
+        resolve(transactions);
+      })
+      .on('error', reject);
+  });
+}
+
+// Helper function to parse Excel files
+function parseExcelFile(filePath) {
+  try {
+    const workbook = xlsx.readFile(filePath);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const jsonData = xlsx.utils.sheet_to_json(worksheet);
+    
+    const transactions = [];
+    for (const row of jsonData) {
+      try {
+        const transaction = parseTransactionRow(row);
+        if (transaction) {
+          transactions.push(transaction);
+        }
+      } catch (error) {
+        console.warn('Failed to parse row:', error.message);
+      }
+    }
+    
+    return transactions;
+  } catch (error) {
+    throw new Error(`Failed to parse Excel file: ${error.message}`);
+  }
+}
+
+// Helper function to parse individual transaction rows
+function parseTransactionRow(row) {
+  // Try to find date column (various possible names)
+  const dateFields = ['date', 'Date', 'DATE', 'Transaction Date', 'Posted Date', 'posting_date'];
+  const descFields = ['description', 'Description', 'DESCRIPTION', 'Memo', 'memo', 'Transaction Description'];
+  const amountFields = ['amount', 'Amount', 'AMOUNT', 'Debit', 'Credit', 'Transaction Amount'];
+
+  let date = null;
+  let description = null;
+  let amount = null;
+
+  // Find date
+  for (const field of dateFields) {
+    if (row[field]) {
+      date = parseDate(row[field]);
+      break;
+    }
+  }
+
+  // Find description
+  for (const field of descFields) {
+    if (row[field]) {
+      description = String(row[field]).trim();
+      break;
+    }
+  }
+
+  // Find amount
+  for (const field of amountFields) {
+    if (row[field] !== undefined && row[field] !== '') {
+      amount = parseFloat(String(row[field]).replace(/[,$]/g, ''));
+      break;
+    }
+  }
+
+  // Handle separate debit/credit columns
+  if (amount === null) {
+    const debit = parseFloat(String(row['Debit'] || row['debit'] || '0').replace(/[,$]/g, ''));
+    const credit = parseFloat(String(row['Credit'] || row['credit'] || '0').replace(/[,$]/g, ''));
+    
+    if (!isNaN(debit) && debit !== 0) {
+      amount = -Math.abs(debit); // Debits are negative
+    } else if (!isNaN(credit) && credit !== 0) {
+      amount = Math.abs(credit); // Credits are positive
+    }
+  }
+
+  if (!date || !description || amount === null || isNaN(amount)) {
+    return null; // Skip invalid rows
+  }
+
+  // Auto-categorize based on description
+  const category = categorizeTransaction(description);
+
+  return {
+    date: date,
+    description: description,
+    amount: amount,
+    category: category,
+    merchant: extractMerchant(description)
+  };
+}
+
+// Helper function to parse dates
+function parseDate(dateStr) {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) {
+    // Try parsing MM/DD/YYYY format
+    const parts = String(dateStr).split(/[\/\-]/);
+    if (parts.length === 3) {
+      const month = parseInt(parts[0]) - 1;
+      const day = parseInt(parts[1]);
+      const year = parseInt(parts[2]);
+      return new Date(year, month, day).toISOString().split('T')[0];
+    }
+    throw new Error(`Invalid date format: ${dateStr}`);
+  }
+  return date.toISOString().split('T')[0];
+}
+
+// Simple transaction categorization
+function categorizeTransaction(description) {
+  const desc = description.toLowerCase();
+  
+  if (desc.includes('grocery') || desc.includes('food') || desc.includes('restaurant') || desc.includes('cafe')) {
+    return 'Food & Dining';
+  } else if (desc.includes('gas') || desc.includes('fuel') || desc.includes('uber') || desc.includes('taxi')) {
+    return 'Transportation';
+  } else if (desc.includes('amazon') || desc.includes('walmart') || desc.includes('target') || desc.includes('shopping')) {
+    return 'Shopping';
+  } else if (desc.includes('electric') || desc.includes('water') || desc.includes('internet') || desc.includes('phone')) {
+    return 'Bills & Utilities';
+  } else if (desc.includes('salary') || desc.includes('payroll') || desc.includes('deposit') || desc.includes('income')) {
+    return 'Income';
+  } else if (desc.includes('movie') || desc.includes('netflix') || desc.includes('spotify') || desc.includes('entertainment')) {
+    return 'Entertainment';
+  } else if (desc.includes('hospital') || desc.includes('doctor') || desc.includes('pharmacy') || desc.includes('medical')) {
+    return 'Healthcare';
+  } else {
+    return 'Other';
+  }
+}
+
+// Extract merchant name from description
+function extractMerchant(description) {
+  // Simple merchant extraction - take first part before common separators
+  const cleaned = description.replace(/[0-9\-#*]/g, '').trim();
+  const parts = cleaned.split(/\s+/);
+  return parts.slice(0, 2).join(' '); // Take first two words
+}
 
 // === MIGRATION ENDPOINT ===
 app.post('/api/migrate', async (req, res) => {
