@@ -888,7 +888,8 @@ app.post('/api/auth/register', async (req, res) => {
     console.error('Registration error:', error);
     res.status(500).json({ 
       error: 'Registration failed', 
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined 
+      details: error.message,
+      code: error.code
     });
   }
 });
