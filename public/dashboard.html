@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Council Dashboard - COVBudget 2.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-orange: #D2691E;
+            --secondary-orange: #CD853F;
+            --dark-brown: #2F1B14;
+            --medium-brown: #4A2C2A;
+            --light-brown: #8B4513;
+            --cream: #FDF5E6;
+            --dark-bg: #1A0F0A;
+            --card-bg: #2D1B12;
+            --text-light: #FDF5E6;
+            --text-muted: #CD853F;
+            --accent-gold: #DAA520;
+            --success-orange: #FF8C42;
+            --warning-amber: #FFA500;
+            --error-red: #DC143C;
+            --gradient-primary: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange));
+            --gradient-bg: linear-gradient(135deg, var(--dark-bg) 0%, var(--dark-brown) 50%, var(--medium-brown) 100%);
+            --gradient-card: linear-gradient(145deg, var(--card-bg), var(--medium-brown));
+            --border-radius: 12px;
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--gradient-bg);
+            color: var(--text-light);
+            line-height: 1.6;
+        }
+
+        .dashboard-container {
+            padding-top: 80px;
+            min-height: 100vh;
+        }
+
+        .dashboard-header {
+            background: var(--gradient-card);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-md);
+        }
+
+        .dashboard-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary-orange);
+            margin-bottom: 0.5rem;
+        }
+
+        .dashboard-subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        .tab-navigation {
+            display: flex;
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 0.5rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-md);
+            overflow-x: auto;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 1rem 1.5rem;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: var(--border-radius);
+            transition: all 0.3s ease;
+            font-weight: 500;
+            min-width: 140px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            justify-content: center;
+        }
+
+        .tab-button.active {
+            background: var(--gradient-primary);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .tab-button:hover:not(.active) {
+            background: rgba(210, 105, 30, 0.1);
+            color: var(--primary-orange);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: var(--gradient-card);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            box-shadow: var(--shadow-md);
+            border: 1px solid rgba(210, 105, 30, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-icon {
+            font-size: 2rem;
+            color: var(--primary-orange);
+        }
+
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-light);
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary-orange);
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-label {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .btn {
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 2px solid var(--primary-orange);
+            color: var(--primary-orange);
+        }
+
+        .btn-secondary:hover {
+            background: var(--primary-orange);
+            color: white;
+        }
+
+        .account-list {
+            list-style: none;
+        }
+
+        .account-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: rgba(210, 105, 30, 0.1);
+            border-radius: var(--border-radius);
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--primary-orange);
+        }
+
+        .account-info h4 {
+            color: var(--text-light);
+            margin-bottom: 0.25rem;
+        }
+
+        .account-info p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .account-balance {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--primary-orange);
+        }
+
+        .upload-area {
+            border: 2px dashed var(--primary-orange);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(210, 105, 30, 0.05);
+        }
+
+        .upload-area:hover {
+            background: rgba(210, 105, 30, 0.1);
+            border-color: var(--secondary-orange);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: var(--primary-orange);
+            margin-bottom: 1rem;
+        }
+
+        .table-container {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th,
+        .table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(210, 105, 30, 0.1);
+        }
+
+        .table th {
+            background: var(--gradient-primary);
+            color: white;
+            font-weight: 600;
+        }
+
+        .table tr:hover {
+            background: rgba(210, 105, 30, 0.05);
+        }
+
+        .category-select {
+            padding: 0.5rem;
+            border-radius: var(--border-radius);
+            border: 1px solid rgba(210, 105, 30, 0.3);
+            background: var(--card-bg);
+            color: var(--text-light);
+        }
+
+        .budget-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 0.75rem;
+            border-radius: var(--border-radius);
+            border: 1px solid rgba(210, 105, 30, 0.3);
+            background: var(--card-bg);
+            color: var(--text-light);
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary-orange);
+        }
+
+        .chart-container {
+            height: 400px;
+            margin: 2rem 0;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-container {
+                padding: 90px 1rem 2rem;
+            }
+            
+            .tab-navigation {
+                flex-wrap: wrap;
+            }
+            
+            .tab-button {
+                flex: none;
+                min-width: 120px;
+            }
+            
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .budget-form {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <h1 class="dashboard-title">
+                <i class="fas fa-tachometer-alt"></i> Council Financial Dashboard
+            </h1>
+            <p class="dashboard-subtitle">
+                Comprehensive financial management and analytics for council operations
+            </p>
+        </div>
+
+        <div class="tab-navigation">
+            <button class="tab-button active" onclick="switchTab('analytics')">
+                <i class="fas fa-chart-line"></i> Analytics
+            </button>
+            <button class="tab-button" onclick="switchTab('accounts')">
+                <i class="fas fa-university"></i> Bank Accounts
+            </button>
+            <button class="tab-button" onclick="switchTab('transactions')">
+                <i class="fas fa-list"></i> Transactions
+            </button>
+            <button class="tab-button" onclick="switchTab('estimated-budget')">
+                <i class="fas fa-calculator"></i> Estimated Budget
+            </button>
+            <button class="tab-button" onclick="switchTab('actual-budget')">
+                <i class="fas fa-edit"></i> Actual Budget
+            </button>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="analytics" class="tab-content active">
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-dollar-sign card-icon"></i>
+                        <h3 class="card-title">Total Balance</h3>
+                    </div>
+                    <div class="metric-value" id="totalBalance">$0.00</div>
+                    <div class="metric-label">Across all accounts</div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-arrow-up card-icon"></i>
+                        <h3 class="card-title">Monthly Income</h3>
+                    </div>
+                    <div class="metric-value" id="monthlyIncome">$0.00</div>
+                    <div class="metric-label">This month</div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-arrow-down card-icon"></i>
+                        <h3 class="card-title">Monthly Expenses</h3>
+                    </div>
+                    <div class="metric-value" id="monthlyExpenses">$0.00</div>
+                    <div class="metric-label">This month</div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-chart-pie card-icon"></i>
+                        <h3 class="card-title">Budget Variance</h3>
+                    </div>
+                    <div class="metric-value" id="budgetVariance">0%</div>
+                    <div class="metric-label">vs. planned budget</div>
+                </div>
+            </div>
+            
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-chart-line card-icon"></i>
+                        <h3 class="card-title">Spending Trends</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="spendingChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-chart-pie card-icon"></i>
+                        <h3 class="card-title">Category Breakdown</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bank Accounts Tab -->
+        <div id="accounts" class="tab-content">
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-plus card-icon"></i>
+                        <h3 class="card-title">Add New Account</h3>
+                    </div>
+                    <div class="budget-form">
+                        <div class="form-group">
+                            <label>Account Name</label>
+                            <input type="text" id="accountName" placeholder="e.g., Council Checking">
+                        </div>
+                        <div class="form-group">
+                            <label>Account Type</label>
+                            <select id="accountType">
+                                <option value="checking">Checking</option>
+                                <option value="savings">Savings</option>
+                                <option value="credit">Credit Card</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Bank Name</label>
+                            <input type="text" id="bankName" placeholder="e.g., First National Bank">
+                        </div>
+                        <div class="form-group">
+                            <label>Initial Balance</label>
+                            <input type="number" id="initialBalance" placeholder="0.00" step="0.01">
+                        </div>
+                    </div>
+                    <button class="btn" onclick="addAccount()">
+                        <i class="fas fa-plus"></i> Add Account
+                    </button>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-university card-icon"></i>
+                    <h3 class="card-title">Your Accounts</h3>
+                </div>
+                <ul class="account-list" id="accountsList">
+                    <!-- Accounts will be loaded here -->
+                </ul>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-upload card-icon"></i>
+                    <h3 class="card-title">Upload Bank Statement</h3>
+                </div>
+                <div class="form-group">
+                    <label>Select Account</label>
+                    <select id="uploadAccountSelect">
+                        <option value="">Choose an account...</option>
+                    </select>
+                </div>
+                <div class="upload-area" onclick="document.getElementById('statementUpload').click()">
+                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                    <h4>Drop your bank statement here</h4>
+                    <p>Or click to browse files</p>
+                    <small>Supports CSV, Excel (.xlsx, .xls) - Max 10MB</small>
+                </div>
+                <input type="file" id="statementUpload" style="display: none;" accept=".csv,.xlsx,.xls" onchange="handleStatementUpload(event)">
+                <div id="uploadStatus" style="margin-top: 1rem;"></div>
+            </div>
+        </div>
+
+        <!-- Transactions Tab -->
+        <div id="transactions" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-filter card-icon"></i>
+                    <h3 class="card-title">Filter Transactions</h3>
+                </div>
+                <div class="budget-form">
+                    <div class="form-group">
+                        <label>Account</label>
+                        <select id="filterAccount">
+                            <option value="">All Accounts</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="filterCategory">
+                            <option value="">All Categories</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Date From</label>
+                        <input type="date" id="filterDateFrom">
+                    </div>
+                    <div class="form-group">
+                        <label>Date To</label>
+                        <input type="date" id="filterDateTo">
+                    </div>
+                </div>
+                <button class="btn" onclick="filterTransactions()">
+                    <i class="fas fa-search"></i> Apply Filters
+                </button>
+            </div>
+            
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th>Account</th>
+                            <th>Category</th>
+                            <th>Amount</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionsTableBody">
+                        <!-- Transactions will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Estimated Budget Tab -->
+        <div id="estimated-budget" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-plus card-icon"></i>
+                    <h3 class="card-title">Add Budget Category</h3>
+                </div>
+                <div class="budget-form">
+                    <div class="form-group">
+                        <label>Category Name</label>
+                        <input type="text" id="budgetCategoryName" placeholder="e.g., Office Supplies">
+                    </div>
+                    <div class="form-group">
+                        <label>Monthly Budget</label>
+                        <input type="number" id="budgetAmount" placeholder="0.00" step="0.01">
+                    </div>
+                </div>
+                <button class="btn" onclick="addBudgetCategory()">
+                    <i class="fas fa-plus"></i> Add Category
+                </button>
+            </div>
+            
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Budgeted Amount</th>
+                            <th>Actual Spent</th>
+                            <th>Remaining</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="budgetTableBody">
+                        <!-- Budget categories will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Actual Budget Tab -->
+        <div id="actual-budget" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-edit card-icon"></i>
+                    <h3 class="card-title">Manage Transaction Categories</h3>
+                </div>
+                <p style="color: var(--text-muted); margin-bottom: 2rem;">
+                    Review and modify the category assignments for your transactions. Changes will affect budget calculations.
+                </p>
+            </div>
+            
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th>Amount</th>
+                            <th>Current Category</th>
+                            <th>New Category</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="actualBudgetTableBody">
+                        <!-- Transactions for category editing will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let accounts = [];
+        let transactions = [];
+        let budgetCategories = [];
+        let charts = {};
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboardData();
+        });
+
+        // Tab switching
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked button
+            event.target.classList.add('active');
+            
+            // Load tab-specific data
+            loadTabData(tabName);
+        }
+
+        // Load dashboard data
+        async function loadDashboardData() {
+            try {
+                const token = localStorage.getItem('authToken');
+                const headers = {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                };
+                
+                // Load accounts
+                const accountsResponse = await fetch('/api/accounts', { headers });
+                if (accountsResponse.ok) {
+                    accounts = await accountsResponse.json();
+                    updateAccountsUI();
+                }
+                
+                // Load transactions
+                const transactionsResponse = await fetch('/api/transactions', { headers });
+                if (transactionsResponse.ok) {
+                    transactions = await transactionsResponse.json();
+                    updateTransactionsUI();
+                }
+                
+                // Load budget categories
+                const budgetResponse = await fetch('/api/budget-categories', { headers });
+                if (budgetResponse.ok) {
+                    budgetCategories = await budgetResponse.json();
+                    updateBudgetUI();
+                }
+                
+                // Update analytics
+                updateAnalytics();
+                
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                showMessage('Error loading dashboard data', 'error');
+            }
+        }
+
+        // Load tab-specific data
+        function loadTabData(tabName) {
+            switch(tabName) {
+                case 'analytics':
+                    updateAnalytics();
+                    break;
+                case 'accounts':
+                    updateAccountsUI();
+                    break;
+                case 'transactions':
+                    updateTransactionsUI();
+                    break;
+                case 'estimated-budget':
+                    updateBudgetUI();
+                    break;
+                case 'actual-budget':
+                    updateActualBudgetUI();
+                    break;
+            }
+        }
+
+        // Account management
+        async function addAccount() {
+            const name = document.getElementById('accountName').value;
+            const type = document.getElementById('accountType').value;
+            const bankName = document.getElementById('bankName').value;
+            const balance = parseFloat(document.getElementById('initialBalance').value) || 0;
+            
+            if (!name || !type || !bankName) {
+                showMessage('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('authToken');
+                const response = await fetch('/api/accounts', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name,
+                        type,
+                        bank_name: bankName,
+                        balance
+                    })
+                });
+                
+                if (response.ok) {
+                    showMessage('Account added successfully', 'success');
+                    document.getElementById('accountName').value = '';
+                    document.getElementById('bankName').value = '';
+                    document.getElementById('initialBalance').value = '';
+                    loadDashboardData();
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to add account');
+                }
+            } catch (error) {
+                showMessage('Error adding account: ' + error.message, 'error');
+            }
+        }
+
+        // Statement upload
+        async function handleStatementUpload(event) {
+            const file = event.target.files[0];
+            const accountId = document.getElementById('uploadAccountSelect').value;
+            
+            if (!file || !accountId) {
+                showMessage('Please select both a file and an account', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('statement', file);
+            formData.append('account_id', accountId);
+            
+            try {
+                const token = localStorage.getItem('authToken');
+                const response = await fetch('/api/upload-statement', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showMessage(`Statement uploaded successfully! ${result.transactions_count} transactions processed.`, 'success');
+                    loadDashboardData();
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Upload failed');
+                }
+            } catch (error) {
+                showMessage('Upload error: ' + error.message, 'error');
+            }
+        }
+
+        // Budget category management
+        async function addBudgetCategory() {
+            const name = document.getElementById('budgetCategoryName').value;
+            const amount = parseFloat(document.getElementById('budgetAmount').value) || 0;
+            
+            if (!name || amount <= 0) {
+                showMessage('Please enter a valid category name and amount', 'error');
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('authToken');
+                const response = await fetch('/api/budget-categories', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name,
+                        budgeted_amount: amount
+                    })
+                });
+                
+                if (response.ok) {
+                    showMessage('Budget category added successfully', 'success');
+                    document.getElementById('budgetCategoryName').value = '';
+                    document.getElementById('budgetAmount').value = '';
+                    loadDashboardData();
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to add category');
+                }
+            } catch (error) {
+                showMessage('Error adding category: ' + error.message, 'error');
+            }
+        }
+
+        // UI Update functions
+        function updateAccountsUI() {
+            const accountsList = document.getElementById('accountsList');
+            const uploadSelect = document.getElementById('uploadAccountSelect');
+            const filterSelect = document.getElementById('filterAccount');
+            
+            accountsList.innerHTML = '';
+            uploadSelect.innerHTML = '<option value="">Choose an account...</option>';
+            filterSelect.innerHTML = '<option value="">All Accounts</option>';
+            
+            accounts.forEach(account => {
+                // Account list item
+                const li = document.createElement('li');
+                li.className = 'account-item';
+                li.innerHTML = `
+                    <div class="account-info">
+                        <h4>${account.name}</h4>
+                        <p>${account.bank_name} • ${account.type}</p>
+                    </div>
+                    <div class="account-balance">$${parseFloat(account.balance || 0).toFixed(2)}</div>
+                `;
+                accountsList.appendChild(li);
+                
+                // Select options
+                uploadSelect.innerHTML += `<option value="${account.id}">${account.name}</option>`;
+                filterSelect.innerHTML += `<option value="${account.id}">${account.name}</option>`;
+            });
+        }
+
+        function updateTransactionsUI() {
+            const tbody = document.getElementById('transactionsTableBody');
+            tbody.innerHTML = '';
+            
+            transactions.forEach(transaction => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${new Date(transaction.date).toLocaleDateString()}</td>
+                    <td>${transaction.description}</td>
+                    <td>${transaction.account_name || 'Unknown'}</td>
+                    <td>
+                        <select class="category-select" onchange="updateTransactionCategory(${transaction.id}, this.value)">
+                            <option value="${transaction.category}">${transaction.category}</option>
+                        </select>
+                    </td>
+                    <td class="${transaction.amount < 0 ? 'text-red' : 'text-green'}">
+                        $${Math.abs(parseFloat(transaction.amount)).toFixed(2)}
+                    </td>
+                    <td>
+                        <button class="btn btn-secondary" onclick="editTransaction(${transaction.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function updateBudgetUI() {
+            const tbody = document.getElementById('budgetTableBody');
+            tbody.innerHTML = '';
+            
+            budgetCategories.forEach(category => {
+                const spent = calculateSpentForCategory(category.name);
+                const remaining = category.budgeted_amount - spent;
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${category.name}</td>
+                    <td>$${parseFloat(category.budgeted_amount).toFixed(2)}</td>
+                    <td>$${spent.toFixed(2)}</td>
+                    <td class="${remaining < 0 ? 'text-red' : 'text-green'}">
+                        $${remaining.toFixed(2)}
+                    </td>
+                    <td>
+                        <button class="btn btn-secondary" onclick="editBudgetCategory(${category.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function updateActualBudgetUI() {
+            const tbody = document.getElementById('actualBudgetTableBody');
+            tbody.innerHTML = '';
+            
+            transactions.forEach(transaction => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${new Date(transaction.date).toLocaleDateString()}</td>
+                    <td>${transaction.description}</td>
+                    <td>$${Math.abs(parseFloat(transaction.amount)).toFixed(2)}</td>
+                    <td>${transaction.category}</td>
+                    <td>
+                        <select class="category-select" id="newCategory_${transaction.id}">
+                            ${budgetCategories.map(cat => 
+                                `<option value="${cat.name}" ${cat.name === transaction.category ? 'selected' : ''}>${cat.name}</option>`
+                            ).join('')}
+                        </select>
+                    </td>
+                    <td>
+                        <button class="btn" onclick="updateTransactionCategory(${transaction.id})">
+                            <i class="fas fa-save"></i> Update
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function updateAnalytics() {
+            // Calculate metrics
+            const totalBalance = accounts.reduce((sum, acc) => sum + parseFloat(acc.balance || 0), 0);
+            const currentMonth = new Date().getMonth();
+            const currentYear = new Date().getFullYear();
+            
+            const monthlyTransactions = transactions.filter(t => {
+                const date = new Date(t.date);
+                return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+            });
+            
+            const monthlyIncome = monthlyTransactions
+                .filter(t => parseFloat(t.amount) > 0)
+                .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+                
+            const monthlyExpenses = Math.abs(monthlyTransactions
+                .filter(t => parseFloat(t.amount) < 0)
+                .reduce((sum, t) => sum + parseFloat(t.amount), 0));
+            
+            // Update UI
+            document.getElementById('totalBalance').textContent = `$${totalBalance.toFixed(2)}`;
+            document.getElementById('monthlyIncome').textContent = `$${monthlyIncome.toFixed(2)}`;
+            document.getElementById('monthlyExpenses').textContent = `$${monthlyExpenses.toFixed(2)}`;
+            
+            // Update charts
+            updateCharts();
+        }
+
+        function updateCharts() {
+            // Spending trends chart
+            const spendingCtx = document.getElementById('spendingChart').getContext('2d');
+            if (charts.spending) charts.spending.destroy();
+            
+            charts.spending = new Chart(spendingCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Expenses',
+                        data: [1200, 1100, 1300, 1000, 1250, 1150],
+                        borderColor: '#D2691E',
+                        backgroundColor: 'rgba(210, 105, 30, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#FDF5E6' }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#FDF5E6' } },
+                        y: { ticks: { color: '#FDF5E6' } }
+                    }
+                }
+            });
+            
+            // Category breakdown chart
+            const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+            if (charts.category) charts.category.destroy();
+            
+            charts.category = new Chart(categoryCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Office Supplies', 'Utilities', 'Maintenance', 'Services'],
+                    datasets: [{
+                        data: [300, 500, 200, 400],
+                        backgroundColor: ['#D2691E', '#CD853F', '#A0522D', '#8B4513']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#FDF5E6' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Helper functions
+        function calculateSpentForCategory(categoryName) {
+            return transactions
+                .filter(t => t.category === categoryName && parseFloat(t.amount) < 0)
+                .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount)), 0);
+        }
+
+        async function updateTransactionCategory(transactionId, newCategory) {
+            if (!newCategory) {
+                newCategory = document.getElementById(`newCategory_${transactionId}`).value;
+            }
+            
+            try {
+                const token = localStorage.getItem('authToken');
+                const response = await fetch(`/api/transactions/${transactionId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ category: newCategory })
+                });
+                
+                if (response.ok) {
+                    showMessage('Transaction category updated', 'success');
+                    loadDashboardData();
+                } else {
+                    throw new Error('Failed to update category');
+                }
+            } catch (error) {
+                showMessage('Error updating category: ' + error.message, 'error');
+            }
+        }
+
+        function showMessage(message, type) {
+            // Create and show message
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 1rem 2rem;
+                border-radius: 8px;
+                color: white;
+                font-weight: 500;
+                z-index: 10000;
+                background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#ffc107'};
+            `;
+            messageDiv.textContent = message;
+            
+            document.body.appendChild(messageDiv);
+            
+            setTimeout(() => {
+                document.body.removeChild(messageDiv);
+            }, 3000);
+        }
+
+        // Filter functions
+        function filterTransactions() {
+            // Implementation for filtering transactions
+            console.log('Filtering transactions...');
+        }
+
+        function editTransaction(id) {
+            console.log('Editing transaction:', id);
+        }
+
+        function editBudgetCategory(id) {
+            console.log('Editing budget category:', id);
+        }
+    </script>
+</body>
+</html> 

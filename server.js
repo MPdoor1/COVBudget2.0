@@ -173,17 +173,22 @@ const authenticateToken = async (req, res, next) => {
 
 // Routes
 app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/api', (req, res) => {
   res.json({
-    message: 'COVBudget 2.0 - Personal Finance & Banking Integration',
+    message: 'COVBudget 2.0 - Council Financial Management',
     status: 'running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     features: [
-      'Bank Account Integration (Plaid)',
+      'Multi-Account Management',
+      'Bank Statement Upload',
       'Transaction Analysis',
       'Budget Management', 
-      'Financial Goals Tracking',
-      'Automated Categorization'
+      'Financial Analytics',
+      'Council Oversight Tools'
     ]
   });
 });
@@ -364,18 +369,99 @@ app.get('/api/accounts', authenticateToken, async (req, res) => {
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const result = await dbClient.query(`
+    const result = await query(`
       SELECT a.*, i.name as institution_name, i.primary_color, i.logo_url
       FROM accounts a
       LEFT JOIN institutions i ON a.institution_id = i.id
       WHERE a.user_id = $1 AND a.is_active = true
-      ORDER BY i.name, a.account_name
+      ORDER BY COALESCE(i.name, a.bank_name), a.name
     `, [req.user.userId]);
 
-    res.json({ accounts: result.rows });
+    res.json(result.rows);
   } catch (error) {
     console.error('Get accounts error:', error);
     res.status(500).json({ error: 'Failed to get accounts' });
+  }
+});
+
+// Create new account
+app.post('/api/accounts', authenticateToken, async (req, res) => {
+  try {
+    if (!dbClient) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+    
+    const { name, type, bank_name, balance } = req.body;
+    
+    if (!name || !type || !bank_name) {
+      return res.status(400).json({ error: 'Name, type, and bank name are required' });
+    }
+    
+    const result = await query(`
+      INSERT INTO accounts (user_id, name, type, bank_name, balance, is_active)
+      VALUES ($1, $2, $3, $4, $5, true)
+      RETURNING *
+    `, [req.user.userId, name, type, bank_name, balance || 0]);
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating account:', error);
+    res.status(500).json({ error: 'Failed to create account' });
+  }
+});
+
+// Update account
+app.put('/api/accounts/:id', authenticateToken, async (req, res) => {
+  try {
+    if (!dbClient) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+    
+    const { id } = req.params;
+    const { name, type, bank_name, balance } = req.body;
+    
+    const result = await query(`
+      UPDATE accounts 
+      SET name = $1, type = $2, bank_name = $3, balance = $4, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $5 AND user_id = $6 AND is_active = true
+      RETURNING *
+    `, [name, type, bank_name, balance, id, req.user.userId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating account:', error);
+    res.status(500).json({ error: 'Failed to update account' });
+  }
+});
+
+// Delete account (soft delete)
+app.delete('/api/accounts/:id', authenticateToken, async (req, res) => {
+  try {
+    if (!dbClient) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+    
+    const { id } = req.params;
+    
+    const result = await query(`
+      UPDATE accounts 
+      SET is_active = false, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND user_id = $2
+      RETURNING *
+    `, [id, req.user.userId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+    
+    res.json({ message: 'Account deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({ error: 'Failed to delete account' });
   }
 });
 
@@ -388,8 +474,11 @@ app.get('/api/transactions', authenticateToken, async (req, res) => {
 
     const { account_id, start_date, end_date, category, limit = 50, offset = 0 } = req.query;
     
-    let query = `
-      SELECT t.*, a.account_name, i.name as institution_name
+    let queryText = `
+      SELECT t.*, 
+             COALESCE(a.name, a.account_name) as account_name, 
+             COALESCE(i.name, a.bank_name) as institution_name,
+             COALESCE(t.category_primary, t.category) as category
       FROM transactions t
       LEFT JOIN accounts a ON t.account_id = a.id
       LEFT JOIN institutions i ON a.institution_id = i.id
@@ -400,42 +489,88 @@ app.get('/api/transactions', authenticateToken, async (req, res) => {
     let paramCount = 1;
 
     if (account_id) {
-      query += ` AND t.account_id = $${++paramCount}`;
+      queryText += ` AND t.account_id = $${++paramCount}`;
       params.push(account_id);
     }
 
     if (start_date) {
-      query += ` AND t.date >= $${++paramCount}`;
+      queryText += ` AND t.date >= $${++paramCount}`;
       params.push(start_date);
     }
 
     if (end_date) {
-      query += ` AND t.date <= $${++paramCount}`;
+      queryText += ` AND t.date <= $${++paramCount}`;
       params.push(end_date);
     }
 
     if (category) {
-      query += ` AND t.category_primary = $${++paramCount}`;
+      queryText += ` AND (t.category_primary = $${++paramCount} OR t.category = $${paramCount})`;
       params.push(category);
     }
 
-    query += ` ORDER BY t.date DESC, t.created_at DESC`;
-    query += ` LIMIT $${++paramCount} OFFSET $${++paramCount}`;
+    queryText += ` ORDER BY t.date DESC, t.created_at DESC`;
+    queryText += ` LIMIT $${++paramCount} OFFSET $${++paramCount}`;
     params.push(limit, offset);
 
-    const result = await dbClient.query(query, params);
+    const result = await query(queryText, params);
 
-    res.json({ 
-      transactions: result.rows,
-      pagination: {
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        total: result.rows.length
-      }
-    });
+    res.json(result.rows);
   } catch (error) {
     console.error('Get transactions error:', error);
     res.status(500).json({ error: 'Failed to get transactions' });
+  }
+});
+
+// Update transaction
+app.put('/api/transactions/:id', authenticateToken, async (req, res) => {
+  try {
+    if (!dbClient) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const { id } = req.params;
+    const { category, description, amount } = req.body;
+
+    let updateFields = [];
+    let params = [req.user.userId, id];
+    let paramCount = 2;
+
+    if (category !== undefined) {
+      updateFields.push(`category_primary = $${++paramCount}, category = $${paramCount}`);
+      params.push(category);
+    }
+
+    if (description !== undefined) {
+      updateFields.push(`description = $${++paramCount}`);
+      params.push(description);
+    }
+
+    if (amount !== undefined) {
+      updateFields.push(`amount = $${++paramCount}`);
+      params.push(amount);
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    const queryText = `
+      UPDATE transactions 
+      SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = $1 AND id = $2
+      RETURNING *
+    `;
+
+    const result = await query(queryText, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Update transaction error:', error);
+    res.status(500).json({ error: 'Failed to update transaction' });
   }
 });
 
@@ -448,16 +583,99 @@ app.get('/api/budget/categories', authenticateToken, async (req, res) => {
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const result = await dbClient.query(`
+    const result = await query(`
       SELECT * FROM budget_categories 
       WHERE user_id = $1 OR user_id IS NULL
       ORDER BY sort_order, name
     `, [req.user.userId]);
 
-    res.json({ categories: result.rows });
+    res.json(result.rows);
   } catch (error) {
     console.error('Get categories error:', error);
     res.status(500).json({ error: 'Failed to get categories' });
+  }
+});
+
+// Alternative endpoint for dashboard compatibility
+app.get('/api/budget-categories', authenticateToken, async (req, res) => {
+  try {
+    if (!dbClient) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const result = await query(`
+      SELECT bc.*, 
+             COALESCE(spent.amount, 0) as spent_amount
+      FROM budget_categories bc
+      LEFT JOIN (
+        SELECT category_primary, SUM(ABS(amount)) as amount
+        FROM transactions 
+        WHERE user_id = $1 AND amount < 0 
+        AND date >= DATE_TRUNC('month', CURRENT_DATE)
+        GROUP BY category_primary
+      ) spent ON bc.name = spent.category_primary
+      WHERE bc.user_id = $1 OR bc.user_id IS NULL
+      ORDER BY bc.sort_order, bc.name
+    `, [req.user.userId]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get budget categories error:', error);
+    res.status(500).json({ error: 'Failed to get budget categories' });
+  }
+});
+
+// Create budget category
+app.post('/api/budget-categories', authenticateToken, async (req, res) => {
+  try {
+    if (!dbClient) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const { name, budgeted_amount, sort_order = 999 } = req.body;
+    
+    if (!name || !budgeted_amount) {
+      return res.status(400).json({ error: 'Name and budgeted amount are required' });
+    }
+
+    const result = await query(`
+      INSERT INTO budget_categories (user_id, name, budgeted_amount, sort_order)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+    `, [req.user.userId, name, budgeted_amount, sort_order]);
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Create budget category error:', error);
+    res.status(500).json({ error: 'Failed to create budget category' });
+  }
+});
+
+// Update budget category
+app.put('/api/budget-categories/:id', authenticateToken, async (req, res) => {
+  try {
+    if (!dbClient) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const { id } = req.params;
+    const { name, budgeted_amount, sort_order } = req.body;
+
+    const result = await query(`
+      UPDATE budget_categories 
+      SET name = $1, budgeted_amount = $2, sort_order = $3, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4 AND user_id = $5
+      RETURNING *
+    `, [name, budgeted_amount, sort_order, id, req.user.userId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Budget category not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Update budget category error:', error);
+    res.status(500).json({ error: 'Failed to update budget category' });
   }
 });
 
@@ -547,7 +765,20 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const { accountName = 'Unknown Account' } = req.body;
+    const { account_id, accountName = 'Unknown Account' } = req.body;
+    
+    // Verify account ownership if account_id is provided
+    if (account_id) {
+      const accountCheck = await query(
+        'SELECT id FROM accounts WHERE id = $1 AND user_id = $2 AND is_active = true',
+        [account_id, req.user.userId]
+      );
+      
+      if (accountCheck.rows.length === 0) {
+        return res.status(400).json({ error: 'Invalid account or account not found' });
+      }
+    }
+
     const filePath = req.file.path;
     const fileName = req.file.originalname;
     const fileExt = path.extname(fileName).toLowerCase();
@@ -577,30 +808,35 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
         RETURNING id
       `, [accountName]);
 
-      const institutionId = institutionResult.rows[0].id;
-
-      const accountResult = await dbClient.query(`
-        INSERT INTO accounts (user_id, institution_id, account_name, account_type, currency_code, is_active)
-        VALUES ($1, $2, $3, 'depository', 'USD', true)
-        ON CONFLICT (user_id, institution_id, account_name) DO UPDATE SET account_name = EXCLUDED.account_name
-        RETURNING id
-      `, [req.user.userId, institutionId, accountName]);
-
-      const accountId = accountResult.rows[0].id;
+      // Use provided account_id or create new account
+      let accountId;
+      
+      if (account_id) {
+        accountId = account_id;
+      } else {
+        // Create new account for this upload
+        const accountResult = await query(`
+          INSERT INTO accounts (user_id, name, type, bank_name, is_active)
+          VALUES ($1, $2, 'checking', 'Uploaded Bank', true)
+          RETURNING id
+        `, [req.user.userId, accountName]);
+        
+        accountId = accountResult.rows[0].id;
+      }
 
       // Insert transactions
       let insertedCount = 0;
       for (const transaction of transactions) {
         try {
-          await dbClient.query(`
+          await query(`
             INSERT INTO transactions (
-              account_id, transaction_id, amount, date, name, 
-              category_primary, category_detailed, merchant_name, 
-              account_owner, iso_currency_code, unofficial_currency_code,
-              created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+              user_id, account_id, transaction_id, amount, date, description, 
+              category_primary, category, merchant_name, 
+              iso_currency_code, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ON CONFLICT (account_id, transaction_id) DO NOTHING
           `, [
+            req.user.userId,
             accountId,
             `upload_${Date.now()}_${insertedCount}`, // Unique transaction ID
             transaction.amount,
@@ -609,9 +845,7 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
             transaction.category || 'Other',
             transaction.category || 'Other',
             transaction.merchant || null,
-            null, // account_owner
-            'USD',
-            null,
+            'USD'
           ]);
           insertedCount++;
         } catch (txError) {
@@ -626,6 +860,7 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
 
       res.json({
         success: true,
+        transactions_count: insertedCount,
         transactionCount: insertedCount,
         totalParsed: transactions.length,
         accountName: accountName,
