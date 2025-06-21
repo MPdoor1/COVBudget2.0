@@ -1301,7 +1301,7 @@ Start by uploading your bank statements to see personalized budget recommendatio
                          showSuccessMessage('Welcome back! Successfully logged in.');
                      } else {
                          if (result.needsMigration) {
-                             showErrorMessage('Database not initialized. Please run migrations first using the button below.');
+                             showErrorMessage('Database not initialized. Please run migrations first using the "Run DB Migration" button below, then try logging in again.');
                          } else {
                              showErrorMessage(result.error || 'Login failed');
                          }
@@ -1346,7 +1346,7 @@ Start by uploading your bank statements to see personalized budget recommendatio
                          showSuccessMessage('Account created successfully! Welcome to COVBudget.');
                      } else {
                          if (result.needsMigration) {
-                             showErrorMessage('Database not initialized. Please run migrations first using the button below.');
+                             showErrorMessage('Database not initialized. Please run migrations first using the "Run DB Migration" button below, then try registering again.');
                          } else {
                              showErrorMessage(result.error || 'Registration failed');
                          }

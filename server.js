@@ -41,7 +41,7 @@ app.use(helmet({
       ],
       scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      styleSrcElem: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      styleSrcElem: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
       styleSrcAttr: ["'unsafe-inline'"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:"],
@@ -819,7 +819,21 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     // Check if database is available
     if (!dbClient) {
-      return res.status(503).json({ error: 'Database service unavailable. Please run migrations first.' });
+      return res.status(503).json({ 
+        error: 'Database service unavailable. Please run migrations first.',
+        needsMigration: true 
+      });
+    }
+
+    // Test database connection
+    try {
+      await query('SELECT 1');
+    } catch (connectionError) {
+      console.error('Database connection test failed:', connectionError);
+      return res.status(503).json({ 
+        error: 'Database connection failed. Please check your database configuration.',
+        needsMigration: true 
+      });
     }
 
     const { name, email, password } = req.body;
