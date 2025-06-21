@@ -211,12 +211,19 @@ async function insertDefaultData(client) {
     { name: 'Savings', description: 'Emergency fund, investments', color_hex: '#F7DC6F', icon: 'savings', is_expense: false }
   ];
   
+  // Create a system user for default categories
+  await client.query(`
+    INSERT INTO users (id, email, password_hash, first_name, last_name)
+    SELECT '00000000-0000-0000-0000-000000000000'::uuid, 'system@covbudget.com', 'system', 'System', 'Default'
+    WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = '00000000-0000-0000-0000-000000000000'::uuid)
+  `);
+  
   for (let i = 0; i < defaultCategories.length; i++) {
     const cat = defaultCategories[i];
     await client.query(`
-      INSERT INTO budget_categories (name, description, color_hex, icon, is_expense, sort_order)
-      SELECT $1, $2, $3, $4, $5, $6
-      WHERE NOT EXISTS (SELECT 1 FROM budget_categories WHERE name = $1 AND user_id IS NULL)
+      INSERT INTO budget_categories (user_id, name, description, color_hex, icon, is_expense, sort_order)
+      SELECT '00000000-0000-0000-0000-000000000000'::uuid, $1, $2, $3, $4, $5, $6
+      WHERE NOT EXISTS (SELECT 1 FROM budget_categories WHERE name = $1 AND user_id = '00000000-0000-0000-0000-000000000000'::uuid)
     `, [cat.name, cat.description, cat.color_hex, cat.icon, cat.is_expense, i]);
   }
   
