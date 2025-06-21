@@ -440,15 +440,21 @@ app.get('/api/analytics/spending', authenticateToken, async (req, res) => {
    }
  });
 
-// Database migration endpoint
+// === MIGRATION ENDPOINT ===
 app.post('/api/migrate', async (req, res) => {
   try {
-    const { runMigrations } = require('./scripts/migrate.js');
+    const { runMigrations } = require('./scripts/migrate');
     await runMigrations();
-    res.json({ success: true, message: 'Database migration completed successfully' });
+    res.json({ 
+      success: true, 
+      message: 'Database migration completed successfully!' 
+    });
   } catch (error) {
-    console.error('Migration error:', error);
-    res.status(500).json({ error: 'Migration failed', message: error.message });
+    console.error('Migration failed:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
   }
 });
 

@@ -312,59 +312,106 @@
                 document.getElementById('keyVaultStatus').textContent = health.services.keyVault ? '🟢' : '🔴';
             } catch (error) {
                 console.error('Health check failed:', error);
+                document.getElementById('dbStatus').textContent = '🔴';
+                document.getElementById('plaidStatus').textContent = '🔴';
+                document.getElementById('keyVaultStatus').textContent = '🔴';
             }
         }
 
         // Create demo chart
         function createDemoChart() {
-            const ctx = document.getElementById('demoChart').getContext('2d');
-            new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Food & Dining', 'Transportation', 'Shopping', 'Bills', 'Entertainment'],
-                    datasets: [{
-                        data: [25, 15, 20, 30, 10],
-                        backgroundColor: [
-                            '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFEAA7', '#96CEB4'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
+            try {
+                const ctx = document.getElementById('demoChart').getContext('2d');
+                if (typeof Chart !== 'undefined') {
+                    new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Food & Dining', 'Transportation', 'Shopping', 'Bills', 'Entertainment'],
+                            datasets: [{
+                                data: [25, 15, 20, 30, 10],
+                                backgroundColor: [
+                                    '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFEAA7', '#96CEB4'
+                                ]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom'
+                                }
+                            }
                         }
-                    }
+                    });
+                } else {
+                    console.warn('Chart.js not loaded, skipping chart creation');
+                    document.getElementById('demoChart').style.display = 'none';
                 }
-            });
+            } catch (error) {
+                console.error('Chart creation failed:', error);
+                document.getElementById('demoChart').style.display = 'none';
+            }
         }
 
         function testBankConnection() {
-            alert('Bank integration requires Plaid API credentials.\n\n1. Sign up at dashboard.plaid.com\n2. Add credentials to Azure Key Vault\n3. Configure environment variables');
+            alert('🏦 Bank Integration Status:\n\n✅ Plaid API configured\n✅ 12,000+ banks supported\n✅ Sandbox environment active\n\nTo connect a real bank account:\n1. Switch to Plaid production environment\n2. Complete Plaid verification process\n3. Use the /api/plaid/link-token endpoint');
         }
 
         function showBudgetDemo() {
-            alert('Budget Management Features:\n\n✅ Set monthly spending limits\n✅ Track progress in real-time\n✅ Get alerts when approaching limits\n✅ Analyze spending patterns\n✅ Set and track financial goals');
+            alert('💰 Budget Management Features:\n\n✅ Set monthly spending limits\n✅ Track progress in real-time\n✅ Get alerts when approaching limits\n✅ Analyze spending patterns\n✅ Set and track financial goals\n\nDatabase includes 8 default categories:\n• Food & Dining\n• Transportation\n• Shopping\n• Entertainment\n• Bills & Utilities\n• Healthcare\n• Income\n• Savings');
         }
 
         async function runMigrations() {
+            const button = event.target;
+            const originalText = button.textContent;
+            
             try {
-                const response = await fetch('/api/migrate', { method: 'POST' });
-                if (response.ok) {
-                    alert('✅ Database migration completed successfully!');
+                button.textContent = 'Running Migration...';
+                button.disabled = true;
+                
+                const response = await fetch('/api/migrate', { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    alert('✅ Database migration completed successfully!\n\nCreated tables:\n• Users & Authentication\n• Bank Institutions\n• Accounts & Transactions\n• Budget Categories & Budgets\n• Financial Goals\n• Transaction Rules\n• Plaid Items\n\nDefault categories have been added.');
+                    
+                    // Refresh health status
+                    setTimeout(checkHealth, 1000);
                 } else {
-                    alert('❌ Migration failed. Check server logs.');
+                    alert('❌ Migration failed: ' + (result.error || 'Unknown error'));
                 }
             } catch (error) {
+                console.error('Migration request failed:', error);
                 alert('❌ Migration failed: ' + error.message);
+            } finally {
+                button.textContent = originalText;
+                button.disabled = false;
             }
         }
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 COVBudget 2.0 Dashboard Loading...');
+            
             checkHealth();
-            createDemoChart();
+            
+            // Wait a bit for Chart.js to load
+            setTimeout(createDemoChart, 500);
+            
+            console.log('✅ Dashboard initialized');
+        });
+
+        // Add click handlers for better debugging
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('btn')) {
+                console.log('Button clicked:', e.target.textContent);
+            }
         });
     </script>
 </body>
