@@ -16,8 +16,26 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Security middleware
-app.use(helmet());
+// Security middleware with updated CSP
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "https://cdn.jsdelivr.net",
+        "https://cdn.plaid.com"
+      ],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https://production.plaid.com", "https://sandbox.plaid.com"],
+      frameSrc: ["'self'", "https://cdn.plaid.com"]
+    }
+  }
+}));
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true
