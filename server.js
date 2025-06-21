@@ -144,6 +144,14 @@ async function initializeDatabase() {
   }
 }
 
+// Database query helper function
+const query = async (text, params) => {
+  if (!dbClient) {
+    throw new Error('Database not connected');
+  }
+  return await dbClient.query(text, params);
+};
+
 // Authentication middleware
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
