@@ -47,11 +47,32 @@ async function createTables(client) {
 
   // Add missing columns to existing users table
   try {
-    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255);`);
-    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP;`);
-    console.log('✅ Added missing columns to users table');
+    // Check if name column exists
+    const nameColumnCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND column_name = 'name'
+    `);
+    
+    if (nameColumnCheck.rows.length === 0) {
+      await client.query(`ALTER TABLE users ADD COLUMN name VARCHAR(255);`);
+      console.log('✅ Added name column to users table');
+    }
+
+    // Check if last_login column exists
+    const lastLoginColumnCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND column_name = 'last_login'
+    `);
+    
+    if (lastLoginColumnCheck.rows.length === 0) {
+      await client.query(`ALTER TABLE users ADD COLUMN last_login TIMESTAMP;`);
+      console.log('✅ Added last_login column to users table');
+    }
+    
   } catch (error) {
-    console.log('Note: Some columns may already exist:', error.message);
+    console.log('Note: Error adding columns:', error.message);
   }
   
   // Banks/Institutions table
