@@ -44,6 +44,15 @@ async function createTables(client) {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  // Add missing columns to existing users table
+  try {
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255);`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP;`);
+    console.log('✅ Added missing columns to users table');
+  } catch (error) {
+    console.log('Note: Some columns may already exist:', error.message);
+  }
   
   // Banks/Institutions table
   await client.query(`
