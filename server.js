@@ -360,6 +360,69 @@ app.get('/api/health', async (req, res) => {
   res.json(health);
 });
 
+// Database diagnostic endpoint
+app.get('/api/db-test', async (req, res) => {
+  console.log('=== DATABASE DIAGNOSTIC TEST ===');
+  console.log('Environment:', process.env.NODE_ENV);
+  console.log('Database client exists:', !!dbClient);
+  
+  try {
+    if (!dbClient) {
+      console.log('ERROR: No database client available');
+      return res.json({
+        success: false,
+        error: 'No database client',
+        details: {
+          environment: process.env.NODE_ENV,
+          dbClient: !!dbClient,
+          connectionString: process.env.DATABASE_URL ? 'SET' : 'NOT SET'
+        }
+      });
+    }
+    
+    console.log('Testing basic database query...');
+    const result = await query('SELECT NOW() as current_time, current_database() as db_name');
+    console.log('Database query result:', result);
+    
+    console.log('Testing accounts table...');
+    const tableTest = await query('SELECT COUNT(*) as count FROM accounts');
+    console.log('Accounts table test:', tableTest);
+    
+    console.log('Testing users table...');
+    const usersTest = await query('SELECT COUNT(*) as count FROM users');
+    console.log('Users table test:', usersTest);
+    
+    res.json({
+      success: true,
+      message: 'Database connection working',
+      database_info: result.rows[0],
+      accounts_count: tableTest.rows[0].count,
+      users_count: usersTest.rows[0].count,
+      details: {
+        environment: process.env.NODE_ENV,
+        dbClient: !!dbClient,
+        connectionString: process.env.DATABASE_URL ? 'SET' : 'NOT SET'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Database test error:', error);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      details: {
+        environment: process.env.NODE_ENV,
+        dbClient: !!dbClient,
+        connectionString: process.env.DATABASE_URL ? 'SET' : 'NOT SET'
+      }
+    });
+  }
+});
+
 // === PLAID/BANKING ENDPOINTS ===
 
 // Create Plaid Link Token
