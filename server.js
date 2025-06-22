@@ -1184,7 +1184,16 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
             ]);
             insertedCount++;
           } catch (txError) {
-            console.warn(`Failed to insert transaction: ${txError.message}`);
+            // Enhanced logging for failed inserts to help diagnose production issues
+            console.error('Failed to insert transaction', {
+              accountId,
+              transaction,
+              error: txError,
+              errorMessage: txError?.message,
+              errorDetail: txError?.detail,
+              errorCode: txError?.code,
+              errorStack: txError?.stack
+            });
           }
         }
       } else {
