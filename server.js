@@ -144,12 +144,104 @@ async function initializeDatabase() {
   }
 }
 
+// In-memory storage for development
+let mockUsers = [];
+let mockAccounts = [];
+let mockTransactions = [];
+let mockBudgetCategories = [];
+
 // Database query helper function
 const query = async (text, params) => {
   if (!dbClient) {
-    throw new Error('Database not connected');
+    if (process.env.NODE_ENV === 'development') {
+      // Mock database for development
+      return await mockQuery(text, params);
+    } else {
+      throw new Error('Database not connected');
+    }
   }
   return await dbClient.query(text, params);
+};
+
+// Mock query function for development
+const mockQuery = async (text, params) => {
+  console.log('Mock query:', text, params);
+  
+  // Handle INSERT INTO accounts
+  if (text.includes('INSERT INTO accounts')) {
+    const [userId, name, type, bankName, balance] = params;
+    const newAccount = {
+      id: 'mock-' + Date.now(),
+      user_id: userId,
+      name,
+      type,
+      bank_name: bankName,
+      balance: balance || 0,
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+    mockAccounts.push(newAccount);
+    return { rows: [newAccount] };
+  }
+  
+  // Handle SELECT from accounts
+  if (text.includes('SELECT') && text.includes('accounts')) {
+    const userAccounts = mockAccounts.filter(acc => acc.user_id === params[0] && acc.is_active);
+    return { rows: userAccounts };
+  }
+  
+  // Handle SELECT from transactions
+  if (text.includes('SELECT') && text.includes('transactions')) {
+    const userTransactions = mockTransactions.filter(tx => tx.user_id === params[0]);
+    return { rows: userTransactions };
+  }
+  
+  // Handle SELECT from budget_categories
+  if (text.includes('SELECT') && text.includes('budget_categories')) {
+    const userCategories = mockBudgetCategories.filter(cat => cat.user_id === params[0]);
+    return { rows: userCategories };
+  }
+  
+  // Handle INSERT INTO budget_categories
+  if (text.includes('INSERT INTO budget_categories')) {
+    const [userId, name, budgetedAmount] = params;
+    const newCategory = {
+      id: 'mock-cat-' + Date.now(),
+      user_id: userId,
+      name,
+      budgeted_amount: budgetedAmount,
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+    mockBudgetCategories.push(newCategory);
+    return { rows: [newCategory] };
+  }
+  
+  // Handle INSERT INTO users (registration)
+  if (text.includes('INSERT INTO users')) {
+    const [name, email, passwordHash] = params;
+    const newUser = {
+      id: 'mock-user-' + Date.now(),
+      name,
+      email,
+      password_hash: passwordHash,
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+    mockUsers.push(newUser);
+    return { rows: [newUser] };
+  }
+  
+  // Handle SELECT from users (login)
+  if (text.includes('SELECT') && text.includes('users') && text.includes('email')) {
+    const email = params[0];
+    const user = mockUsers.find(u => u.email === email);
+    return { rows: user ? [user] : [] };
+  }
+  
+  // Default empty response
+  return { rows: [] };
 };
 
 // Authentication middleware
@@ -167,6 +259,11 @@ const authenticateToken = async (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
+    // In development mode, allow a mock user for testing
+    if (process.env.NODE_ENV === 'development' && token === 'mock-token') {
+      req.user = { userId: 'mock-user-123', email: 'test@example.com' };
+      return next();
+    }
     return res.status(403).json({ error: 'Invalid token' });
   }
 };
@@ -365,7 +462,7 @@ app.post('/api/plaid/exchange-token', authenticateToken, async (req, res) => {
 // Get accounts
 app.get('/api/accounts', authenticateToken, async (req, res) => {
   try {
-    if (!dbClient) {
+    if (!dbClient && process.env.NODE_ENV !== 'development') {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -387,7 +484,7 @@ app.get('/api/accounts', authenticateToken, async (req, res) => {
 // Create new account
 app.post('/api/accounts', authenticateToken, async (req, res) => {
   try {
-    if (!dbClient) {
+    if (!dbClient && process.env.NODE_ENV !== 'development') {
       return res.status(503).json({ error: 'Database not available' });
     }
     
@@ -599,7 +696,7 @@ app.get('/api/budget/categories', authenticateToken, async (req, res) => {
 // Alternative endpoint for dashboard compatibility
 app.get('/api/budget-categories', authenticateToken, async (req, res) => {
   try {
-    if (!dbClient) {
+    if (!dbClient && process.env.NODE_ENV !== 'development') {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -628,7 +725,7 @@ app.get('/api/budget-categories', authenticateToken, async (req, res) => {
 // Create budget category
 app.post('/api/budget-categories', authenticateToken, async (req, res) => {
   try {
-    if (!dbClient) {
+    if (!dbClient && process.env.NODE_ENV !== 'development') {
       return res.status(503).json({ error: 'Database not available' });
     }
 

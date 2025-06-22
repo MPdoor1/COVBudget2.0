@@ -675,7 +675,14 @@
         // Load dashboard data
         async function loadDashboardData() {
             try {
-                const token = localStorage.getItem('authToken');
+                let token = localStorage.getItem('authToken');
+                
+                // For development, use a mock token if no token exists
+                if (!token) {
+                    token = 'mock-token';
+                    localStorage.setItem('authToken', token);
+                }
+                
                 const headers = {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -745,7 +752,12 @@
             }
             
             try {
-                const token = localStorage.getItem('authToken');
+                let token = localStorage.getItem('authToken');
+                if (!token) {
+                    token = 'mock-token';
+                    localStorage.setItem('authToken', token);
+                }
+                
                 const response = await fetch('/api/accounts', {
                     method: 'POST',
                     headers: {
@@ -790,7 +802,12 @@
             formData.append('account_id', accountId);
             
             try {
-                const token = localStorage.getItem('authToken');
+                let token = localStorage.getItem('authToken');
+                if (!token) {
+                    token = 'mock-token';
+                    localStorage.setItem('authToken', token);
+                }
+                
                 const response = await fetch('/api/upload-statement', {
                     method: 'POST',
                     headers: {
@@ -823,7 +840,12 @@
             }
             
             try {
-                const token = localStorage.getItem('authToken');
+                let token = localStorage.getItem('authToken');
+                if (!token) {
+                    token = 'mock-token';
+                    localStorage.setItem('authToken', token);
+                }
+                
                 const response = await fetch('/api/budget-categories', {
                     method: 'POST',
                     headers: {
@@ -1059,7 +1081,12 @@
             }
             
             try {
-                const token = localStorage.getItem('authToken');
+                let token = localStorage.getItem('authToken');
+                if (!token) {
+                    token = 'mock-token';
+                    localStorage.setItem('authToken', token);
+                }
+                
                 const response = await fetch(`/api/transactions/${transactionId}`, {
                     method: 'PUT',
                     headers: {

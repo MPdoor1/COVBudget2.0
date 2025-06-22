@@ -44,4 +44,5 @@ build/
 
 # Temporary files
 tmp/
-temp/ 
+temp/
+uploads/ 
