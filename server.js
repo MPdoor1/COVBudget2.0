@@ -1136,12 +1136,16 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
 
       if (dbClient) {
         // Create or get institution and account
-        const institutionResult = await dbClient.query(`
-          INSERT INTO institutions (name, country) 
-          VALUES ($1, 'US') 
-          ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-          RETURNING id
-        `, [accountName]);
+        try {
+          const institutionResult = await dbClient.query(`
+            INSERT INTO institutions (name, country) 
+            VALUES ($1, 'US') 
+            ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+            RETURNING id
+          `, [accountName]);
+        } catch (instError) {
+          console.warn('Institution creation failed:', instError.message);
+        }
 
         // Use provided account_id or create new account
         if (!account_id) {
