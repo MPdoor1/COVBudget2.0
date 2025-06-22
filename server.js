@@ -423,6 +423,49 @@ app.get('/api/db-test', async (req, res) => {
   }
 });
 
+// Test account creation without auth (REMOVE AFTER DEBUGGING)
+app.post('/api/test-account', async (req, res) => {
+  try {
+    console.log('=== TEST ACCOUNT CREATION (NO AUTH) ===');
+    console.log('Request body:', req.body);
+    
+    const { name, type, bank_name, balance, user_id } = req.body;
+    
+    if (!name || !type || !bank_name || !user_id) {
+      return res.status(400).json({ error: 'Missing required fields: name, type, bank_name, user_id' });
+    }
+    
+    console.log('Testing database query...');
+    const queryText = `
+      INSERT INTO accounts (user_id, name, type, bank_name, balance, is_active)
+      VALUES ($1, $2, $3, $4, $5, true)
+      RETURNING *
+    `;
+    const queryParams = [user_id, name, type, bank_name, balance || 0];
+    console.log('Query:', queryText);
+    console.log('Params:', queryParams);
+    
+    const result = await query(queryText, queryParams);
+    console.log('SUCCESS! Account created:', result.rows[0]);
+    
+    res.json({
+      success: true,
+      account: result.rows[0]
+    });
+    
+  } catch (error) {
+    console.error('Test account creation error:', error);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // === PLAID/BANKING ENDPOINTS ===
 
 // Create Plaid Link Token
