@@ -1334,6 +1334,8 @@ function parseTransactionRow(row) {
     // Assume format: Date, Amount, Description (most common bank format)
     console.log('Detected headerless CSV format');
     try {
+      // For headerless CSV, the values array contains the actual data
+      // The keys might be auto-generated column names like '0', '1', '2' or column headers from first row
       date = parseDate(values[0]);
       amount = parseFloat(String(values[1]).replace(/[,$\s]/g, ''));
       description = String(values[2]).trim();
@@ -1352,6 +1354,38 @@ function parseTransactionRow(row) {
       }
     } catch (error) {
       console.warn('Failed to parse headerless format:', error.message);
+    }
+  }
+
+  // If headerless parsing failed, try to parse as if columns are mixed up
+  if (values.length >= 3) {
+    console.log('Trying alternative column parsing');
+    for (let i = 0; i < values.length; i++) {
+      for (let j = 0; j < values.length; j++) {
+        for (let k = 0; k < values.length; k++) {
+          if (i !== j && j !== k && i !== k) {
+            try {
+              const testDate = parseDate(values[i]);
+              const testAmount = parseFloat(String(values[j]).replace(/[,$\s]/g, ''));
+              const testDesc = String(values[k]).trim();
+              
+              if (testDate && !isNaN(testAmount) && testDesc && testDesc.length > 3) {
+                console.log(`Found valid combination: date=${values[i]}, amount=${values[j]}, desc=${values[k]}`);
+                const category = categorizeTransaction(testDesc);
+                return {
+                  date: testDate,
+                  description: testDesc,
+                  amount: testAmount,
+                  category: category,
+                  merchant: extractMerchant(testDesc)
+                };
+              }
+            } catch (error) {
+              // Continue trying other combinations
+            }
+          }
+        }
+      }
     }
   }
 
