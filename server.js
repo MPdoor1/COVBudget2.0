@@ -1372,6 +1372,12 @@ function parseWellsFargoRow(row, rowIndex) {
       const colLetter = String.fromCharCode(69 + (i - 4)); // E, F, G, H, etc.
       if (values[i] && String(values[i]).trim() && String(values[i]).trim() !== '*' && String(values[i]).trim() !== '') {
         const part = String(values[i]).trim();
+        // Skip if part is purely numeric (amount mistakenly placed)
+        const numericCheck = part.replace(/[,$]/g, '').match(/^[-+]?\d+(\.\d+)?$/);
+        if (numericCheck) {
+          console.log(`Skipping numeric part in column ${colLetter}:`, part);
+          continue;
+        }
         descriptionParts.push(part);
         console.log(`Found description part in column ${colLetter} (${i}):`, part);
       }
