@@ -1324,7 +1324,13 @@ function parseWellsFargoRow(row, rowIndex) {
   console.log(`Parsing Wells Fargo row ${rowIndex}:`, row);
   
   const keys = Object.keys(row);
-  const values = Object.values(row);
+  // Clean and normalize values: trim whitespace and remove surrounding quotes
+  const values = Object.values(row).map(val => {
+    if (typeof val === 'string') {
+      return val.trim().replace(/^"+|"+$/g, '');
+    }
+    return val;
+  });
   
   console.log('Row keys:', keys);
   console.log('Row values:', values);
