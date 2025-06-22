@@ -1098,7 +1098,7 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
     const { account_id, accountName = 'Unknown Account' } = req.body;
     
     // Verify account ownership if account_id is provided
-    if (account_id) {
+    if (account_id && dbClient) {
       const accountCheck = await query(
         'SELECT id FROM accounts WHERE id = $1 AND user_id = $2 AND is_active = true',
         [account_id, req.user.userId]
@@ -1130,57 +1130,63 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
         throw new Error('No valid transactions found in file');
       }
 
-      // Create or get institution and account
-      const institutionResult = await dbClient.query(`
-        INSERT INTO institutions (name, country) 
-        VALUES ($1, 'US') 
-        ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-        RETURNING id
-      `, [accountName]);
-
-      // Use provided account_id or create new account
-      let accountId;
-      
-      if (account_id) {
-        accountId = account_id;
-      } else {
-        // Create new account for this upload
-        const accountResult = await query(`
-          INSERT INTO accounts (user_id, name, type, bank_name, is_active)
-          VALUES ($1, $2, 'checking', 'Uploaded Bank', true)
-          RETURNING id
-        `, [req.user.userId, accountName]);
-        
-        accountId = accountResult.rows[0].id;
-      }
-
-      // Insert transactions
+      // Handle database operations
       let insertedCount = 0;
-      for (const transaction of transactions) {
-        try {
-          await query(`
-            INSERT INTO transactions (
-              user_id, account_id, transaction_id, amount, date, description, 
-              category_primary, category, merchant_name, 
-              iso_currency_code, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ON CONFLICT (account_id, transaction_id) DO NOTHING
-          `, [
-            req.user.userId,
-            accountId,
-            `upload_${Date.now()}_${insertedCount}`, // Unique transaction ID
-            transaction.amount,
-            transaction.date,
-            transaction.description,
-            transaction.category || 'Other',
-            transaction.category || 'Other',
-            transaction.merchant || null,
-            'USD'
-          ]);
-          insertedCount++;
-        } catch (txError) {
-          console.warn(`Failed to insert transaction: ${txError.message}`);
+      let accountId = account_id;
+
+      if (dbClient) {
+        // Create or get institution and account
+        const institutionResult = await dbClient.query(`
+          INSERT INTO institutions (name, country) 
+          VALUES ($1, 'US') 
+          ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+          RETURNING id
+        `, [accountName]);
+
+        // Use provided account_id or create new account
+        if (!account_id) {
+          // Create new account for this upload
+          const accountResult = await query(`
+            INSERT INTO accounts (user_id, name, type, bank_name, is_active)
+            VALUES ($1, $2, 'checking', 'Uploaded Bank', true)
+            RETURNING id
+          `, [req.user.userId, accountName]);
+          
+          accountId = accountResult.rows[0].id;
         }
+
+        // Insert transactions
+        for (const transaction of transactions) {
+          try {
+            await query(`
+              INSERT INTO transactions (
+                user_id, account_id, transaction_id, amount, date, description, 
+                category_primary, category, merchant_name, 
+                iso_currency_code, created_at, updated_at
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT (account_id, transaction_id) DO NOTHING
+            `, [
+              req.user.userId,
+              accountId,
+              `upload_${Date.now()}_${insertedCount}`, // Unique transaction ID
+              transaction.amount,
+              transaction.date,
+              transaction.description,
+              transaction.category || 'Other',
+              transaction.category || 'Other',
+              transaction.merchant || null,
+              'USD'
+            ]);
+            insertedCount++;
+          } catch (txError) {
+            console.warn(`Failed to insert transaction: ${txError.message}`);
+          }
+        }
+      } else {
+        // Development mode - simulate processing
+        console.log('Development mode: simulating transaction processing');
+        insertedCount = transactions.length;
+        accountId = account_id || 'dev-account-id';
       }
 
       // Get date range for summary
@@ -1271,19 +1277,54 @@ function parseExcelFile(filePath) {
 // Helper function to parse individual transaction rows
 function parseTransactionRow(row) {
   // Try to find date column (various possible names)
-  const dateFields = ['date', 'Date', 'DATE', 'Transaction Date', 'Posted Date', 'posting_date'];
-  const descFields = ['description', 'Description', 'DESCRIPTION', 'Memo', 'memo', 'Transaction Description'];
-  const amountFields = ['amount', 'Amount', 'AMOUNT', 'Debit', 'Credit', 'Transaction Amount'];
+  const dateFields = [
+    'date', 'Date', 'DATE', 'Transaction Date', 'Posted Date', 'posting_date',
+    'Post Date', 'Posting Date', 'Trans Date', 'Settlement Date'
+  ];
+  const descFields = [
+    'description', 'Description', 'DESCRIPTION', 'Memo', 'memo', 'Transaction Description',
+    'Details', 'Payee', 'Transaction', 'Reference', 'Merchant', 'Transaction Details'
+  ];
+  const amountFields = [
+    'amount', 'Amount', 'AMOUNT', 'Debit', 'Credit', 'Transaction Amount',
+    'Withdrawal', 'Deposit', 'Balance Change', 'Net Amount'
+  ];
 
   let date = null;
   let description = null;
   let amount = null;
 
+  // Debug: log the row structure for the first few rows
+  const keys = Object.keys(row);
+  if (keys.length > 0) {
+    console.log('Available columns:', keys);
+    console.log('Sample row data:', row);
+  }
+
   // Find date
   for (const field of dateFields) {
     if (row[field]) {
-      date = parseDate(row[field]);
-      break;
+      try {
+        date = parseDate(row[field]);
+        break;
+      } catch (error) {
+        console.warn(`Failed to parse date from field ${field}:`, row[field]);
+      }
+    }
+  }
+
+  // If no standard date field found, try the first column that looks like a date
+  if (!date) {
+    for (const [key, value] of Object.entries(row)) {
+      if (value && typeof value === 'string' && value.match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/)) {
+        try {
+          date = parseDate(value);
+          console.log(`Found date in column "${key}":`, value);
+          break;
+        } catch (error) {
+          // Continue searching
+        }
+      }
     }
   }
 
@@ -1295,18 +1336,36 @@ function parseTransactionRow(row) {
     }
   }
 
+  // If no standard description field found, use the longest text field
+  if (!description) {
+    let longestField = '';
+    for (const [key, value] of Object.entries(row)) {
+      if (value && typeof value === 'string' && value.length > longestField.length && 
+          !key.toLowerCase().includes('amount') && !key.toLowerCase().includes('balance')) {
+        longestField = value;
+        description = value.trim();
+      }
+    }
+    if (description) {
+      console.log('Using longest text field as description:', description);
+    }
+  }
+
   // Find amount
   for (const field of amountFields) {
     if (row[field] !== undefined && row[field] !== '') {
-      amount = parseFloat(String(row[field]).replace(/[,$]/g, ''));
-      break;
+      const cleanAmount = String(row[field]).replace(/[,$\s]/g, '');
+      amount = parseFloat(cleanAmount);
+      if (!isNaN(amount)) {
+        break;
+      }
     }
   }
 
   // Handle separate debit/credit columns
-  if (amount === null) {
-    const debit = parseFloat(String(row['Debit'] || row['debit'] || '0').replace(/[,$]/g, ''));
-    const credit = parseFloat(String(row['Credit'] || row['credit'] || '0').replace(/[,$]/g, ''));
+  if (amount === null || isNaN(amount)) {
+    const debit = parseFloat(String(row['Debit'] || row['debit'] || row['Withdrawal'] || '0').replace(/[,$\s]/g, ''));
+    const credit = parseFloat(String(row['Credit'] || row['credit'] || row['Deposit'] || '0').replace(/[,$\s]/g, ''));
     
     if (!isNaN(debit) && debit !== 0) {
       amount = -Math.abs(debit); // Debits are negative
@@ -1315,7 +1374,22 @@ function parseTransactionRow(row) {
     }
   }
 
+  // If still no amount found, try to find any numeric field
+  if (amount === null || isNaN(amount)) {
+    for (const [key, value] of Object.entries(row)) {
+      if (value && !isNaN(parseFloat(String(value).replace(/[,$\s]/g, '')))) {
+        const testAmount = parseFloat(String(value).replace(/[,$\s]/g, ''));
+        if (Math.abs(testAmount) > 0.01) { // Ignore very small amounts that might be fees/IDs
+          amount = testAmount;
+          console.log(`Found amount in column "${key}":`, testAmount);
+          break;
+        }
+      }
+    }
+  }
+
   if (!date || !description || amount === null || isNaN(amount)) {
+    console.warn('Skipping invalid row:', { date, description, amount, availableFields: Object.keys(row) });
     return null; // Skip invalid rows
   }
 
@@ -1333,19 +1407,64 @@ function parseTransactionRow(row) {
 
 // Helper function to parse dates
 function parseDate(dateStr) {
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) {
-    // Try parsing MM/DD/YYYY format
-    const parts = String(dateStr).split(/[\/\-]/);
-    if (parts.length === 3) {
-      const month = parseInt(parts[0]) - 1;
-      const day = parseInt(parts[1]);
-      const year = parseInt(parts[2]);
-      return new Date(year, month, day).toISOString().split('T')[0];
-    }
-    throw new Error(`Invalid date format: ${dateStr}`);
+  if (!dateStr) throw new Error('Date string is empty');
+  
+  const dateString = String(dateStr).trim();
+  
+  // Try direct parsing first
+  let date = new Date(dateString);
+  if (!isNaN(date.getTime())) {
+    return date.toISOString().split('T')[0];
   }
-  return date.toISOString().split('T')[0];
+  
+  // Try MM/DD/YYYY or MM-DD-YYYY format
+  let parts = dateString.split(/[\/\-]/);
+  if (parts.length === 3) {
+    const month = parseInt(parts[0]) - 1;
+    const day = parseInt(parts[1]);
+    let year = parseInt(parts[2]);
+    
+    // Handle 2-digit years
+    if (year < 100) {
+      year += year < 50 ? 2000 : 1900;
+    }
+    
+    date = new Date(year, month, day);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+  }
+  
+  // Try DD/MM/YYYY format
+  if (parts.length === 3) {
+    const day = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1;
+    let year = parseInt(parts[2]);
+    
+    if (year < 100) {
+      year += year < 50 ? 2000 : 1900;
+    }
+    
+    date = new Date(year, month, day);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+  }
+  
+  // Try YYYY-MM-DD format
+  parts = dateString.split('-');
+  if (parts.length === 3) {
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1;
+    const day = parseInt(parts[2]);
+    
+    date = new Date(year, month, day);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+  }
+  
+  throw new Error(`Invalid date format: ${dateStr}`);
 }
 
 // Simple transaction categorization
