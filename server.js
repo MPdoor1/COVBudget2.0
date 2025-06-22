@@ -484,26 +484,53 @@ app.get('/api/accounts', authenticateToken, async (req, res) => {
 // Create new account
 app.post('/api/accounts', authenticateToken, async (req, res) => {
   try {
+    console.log('=== ACCOUNT CREATION DEBUG ===');
+    console.log('Environment:', process.env.NODE_ENV);
+    console.log('Database client exists:', !!dbClient);
+    console.log('Request body:', req.body);
+    console.log('User info:', req.user);
+    
     if (!dbClient && process.env.NODE_ENV !== 'development') {
+      console.log('ERROR: Database not available in production');
       return res.status(503).json({ error: 'Database not available' });
     }
     
     const { name, type, bank_name, balance } = req.body;
+    console.log('Extracted fields:', { name, type, bank_name, balance });
     
     if (!name || !type || !bank_name) {
+      console.log('ERROR: Missing required fields');
       return res.status(400).json({ error: 'Name, type, and bank name are required' });
     }
     
-    const result = await query(`
+    console.log('About to execute database query...');
+    const queryText = `
       INSERT INTO accounts (user_id, name, type, bank_name, balance, is_active)
       VALUES ($1, $2, $3, $4, $5, true)
       RETURNING *
-    `, [req.user.userId, name, type, bank_name, balance || 0]);
+    `;
+    const queryParams = [req.user.userId, name, type, bank_name, balance || 0];
+    console.log('Query:', queryText);
+    console.log('Params:', queryParams);
+    
+    const result = await query(queryText, queryParams);
+    console.log('Query result:', result);
+    console.log('Returned account:', result.rows[0]);
     
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error creating account:', error);
-    res.status(500).json({ error: 'Failed to create account' });
+    console.error('Error stack:', error.stack);
+    console.error('Error message:', error.message);
+    console.error('Database client status:', !!dbClient);
+    console.error('Request body:', req.body);
+    console.error('User info:', req.user);
+    
+    res.status(500).json({ 
+      error: 'Failed to create account',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
