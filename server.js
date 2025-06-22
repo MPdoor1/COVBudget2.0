@@ -1369,11 +1369,30 @@ function parseWellsFargoRow(row, rowIndex) {
       }
     }
     
-    // Wells Fargo specific format: A=Date, B=Amount, C=*, D=Empty, E=Description
-    // Try to get description from column E (index 4) first
-    if (values.length > 4 && values[4] && String(values[4]).trim() && String(values[4]).trim() !== '*') {
-      description = String(values[4]).trim();
-      console.log(`Found description in column 4 (E):`, description);
+    // Wells Fargo specific format: A=Date, B=Amount, C=*, D=Empty, E=Description Part 1, F=Description Part 2, G=Description Part 3
+    // Concatenate description from columns E, F, G (indices 4, 5, 6)
+    let descriptionParts = [];
+    
+    // Check columns starting from E (index 4) onwards for description parts
+    for (let i = 4; i < values.length; i++) {
+      if (values[i] && String(values[i]).trim() && String(values[i]).trim() !== '*') {
+        const part = String(values[i]).trim();
+        // Skip if this looks like a date
+        if (part.match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/)) {
+          continue;
+        }
+        // Skip if this looks like a pure number (amount)
+        const cleanValue = part.replace(/[,$\s]/g, '');
+        if (!isNaN(parseFloat(cleanValue)) && cleanValue === parseFloat(cleanValue).toString()) {
+          continue;
+        }
+        descriptionParts.push(part);
+      }
+    }
+    
+    if (descriptionParts.length > 0) {
+      description = descriptionParts.join(' ').trim();
+      console.log(`Found description parts in columns E,F,G:`, descriptionParts, '-> combined:', description);
     } else {
       // Fallback: look for the longest meaningful text field
       let longestText = '';
