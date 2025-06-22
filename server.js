@@ -66,8 +66,8 @@ app.use(limiter);
 
 app.use(express.json({ limit: '10mb' }));
 
-// Serve static files
-app.use(express.static('public'));
+// Serve static assets but disable automatic index.html at root so we can control landing page
+app.use(express.static('public', { index: false }));
 
 // Azure Key Vault setup
 let secretClient;
