@@ -278,7 +278,34 @@ const authenticateToken = async (req, res, next) => {
       return next();
     }
     if (token === 'mock-token') {
-      req.user = { userId: 'mock-user-123', email: 'test@example.com' };
+      try {
+        // Ensure there is a persistent demo user so foreign-key constraints succeed
+        if (dbClient) {
+          const mockEmail = 'demo@example.com';
+          // Fetch existing demo user by email
+          const existing = await dbClient.query('SELECT id FROM users WHERE email = $1 LIMIT 1', [mockEmail]);
+          let demoId;
+          if (existing.rows.length) {
+            demoId = existing.rows[0].id;
+          } else {
+            // Insert minimal record (works for UUID or SERIAL PKs)
+            const inserted = await dbClient.query(
+              `INSERT INTO users (name, email, password_hash, created_at, updated_at)
+               VALUES ('Demo User', $1, 'mock-hash', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+               RETURNING id`,
+              [mockEmail]
+            );
+            demoId = inserted.rows[0].id;
+          }
+          req.user = { userId: demoId, email: mockEmail };
+        } else {
+          // No DB (e.g. local dev) – keep hard-coded id
+          req.user = { userId: 'mock-user-123', email: 'test@example.com' };
+        }
+      } catch (mockErr) {
+        console.error('Failed to ensure demo user exists:', mockErr.message);
+        req.user = { userId: 'mock-user-123', email: 'test@example.com' };
+      }
       return next();
     }
     return res.status(403).json({ error: 'Invalid token' });
