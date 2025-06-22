@@ -9,7 +9,7 @@ on:
 env:
   AZURE_WEBAPP_NAME: 'covbudget-app-4mfd6qqhx3euo'  # Set this to your application name
   AZURE_WEBAPP_PACKAGE_PATH: '.'                     # Set this to the path of your web app project, defaults to the repository root
-  NODE_VERSION: '18.x'                               # Set this to the node version to use
+  NODE_VERSION: '20.x'                               # Updated to Node 20 LTS (supported)
 
 jobs:
   build:
