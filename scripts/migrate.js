@@ -94,7 +94,7 @@ async function createTables(client) {
     CREATE TABLE IF NOT EXISTS accounts (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-      institution_id UUID REFERENCES institutions(id) ON DELETE CASCADE,
+      institution_id UUID REFERENCES institutions(id) ON DELETE SET NULL,
       plaid_account_id VARCHAR(255) UNIQUE,
       account_name VARCHAR(255), -- Legacy column
       name VARCHAR(255), -- New column for dashboard
@@ -161,6 +161,14 @@ async function createTables(client) {
     if (balanceColumnCheck.rows.length === 0) {
       await client.query(`ALTER TABLE accounts ADD COLUMN balance DECIMAL(12,2);`);
       console.log('✅ Added balance column to accounts table');
+    }
+
+    // Make institution_id nullable for manual account creation
+    try {
+      await client.query(`ALTER TABLE accounts ALTER COLUMN institution_id DROP NOT NULL;`);
+      console.log('✅ Made institution_id nullable in accounts table');
+    } catch (error) {
+      console.log('Note: institution_id column already nullable or doesn\'t exist');
     }
     
   } catch (error) {
