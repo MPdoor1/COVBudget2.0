@@ -1232,20 +1232,43 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
 function parseCSVFile(filePath) {
   return new Promise((resolve, reject) => {
     const transactions = [];
+    let rowCount = 0;
+    let hasHeaders = false;
     
     fs.createReadStream(filePath)
       .pipe(csv())
       .on('data', (row) => {
         try {
+          rowCount++;
+          console.log(`Processing row ${rowCount}:`, row);
+          
+          // Check if this looks like a header row
+          if (rowCount === 1) {
+            const values = Object.values(row);
+            const hasDateValue = values.some(val => val && val.toString().match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/));
+            hasHeaders = !hasDateValue;
+            console.log('Has headers:', hasHeaders, 'Values:', values);
+          }
+          
+          // Skip header row if detected
+          if (hasHeaders && rowCount === 1) {
+            console.log('Skipping header row');
+            return;
+          }
+          
           const transaction = parseTransactionRow(row);
           if (transaction) {
             transactions.push(transaction);
+            console.log('Successfully parsed transaction:', transaction);
+          } else {
+            console.log('Failed to parse row into transaction');
           }
         } catch (error) {
           console.warn('Failed to parse row:', error.message);
         }
       })
       .on('end', () => {
+        console.log(`CSV parsing complete. Total rows: ${rowCount}, Transactions: ${transactions.length}`);
         resolve(transactions);
       })
       .on('error', reject);
@@ -1298,11 +1321,38 @@ function parseTransactionRow(row) {
   let description = null;
   let amount = null;
 
-  // Debug: log the row structure for the first few rows
+  // Debug: log the row structure
   const keys = Object.keys(row);
-  if (keys.length > 0) {
-    console.log('Available columns:', keys);
-    console.log('Sample row data:', row);
+  const values = Object.values(row);
+  console.log('Row keys:', keys);
+  console.log('Row values:', values);
+
+  // Check if this is a headerless CSV (columns accessed by index)
+  const isHeaderless = keys.every(key => /^\d+$/.test(key) || key.startsWith('column'));
+  
+  if (isHeaderless && values.length >= 3) {
+    // Assume format: Date, Amount, Description (most common bank format)
+    console.log('Detected headerless CSV format');
+    try {
+      date = parseDate(values[0]);
+      amount = parseFloat(String(values[1]).replace(/[,$\s]/g, ''));
+      description = String(values[2]).trim();
+      
+      console.log('Parsed headerless:', { date, amount, description });
+      
+      if (date && !isNaN(amount) && description) {
+        const category = categorizeTransaction(description);
+        return {
+          date: date,
+          description: description,
+          amount: amount,
+          category: category,
+          merchant: extractMerchant(description)
+        };
+      }
+    } catch (error) {
+      console.warn('Failed to parse headerless format:', error.message);
+    }
   }
 
   // Find date
