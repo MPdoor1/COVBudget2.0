@@ -256,6 +256,7 @@ const authenticateToken = async (req, res, next) => {
   try {
     const jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
     const decoded = jwt.verify(token, jwtSecret);
+    console.log('JWT decoded successfully:', { userId: decoded.userId, email: decoded.email });
     req.user = decoded;
     next();
   } catch (error) {
@@ -627,8 +628,8 @@ app.post('/api/accounts', authenticateToken, async (req, res) => {
     
     console.log('About to execute database query...');
     const queryText = `
-      INSERT INTO accounts (user_id, name, type, bank_name, balance, is_active)
-      VALUES ($1, $2, $3, $4, $5, true)
+      INSERT INTO accounts (user_id, name, account_name, type, account_type, bank_name, balance, is_active)
+      VALUES ($1, $2, $2, $3, $3, $4, $5, true)
       RETURNING *
     `;
     const queryParams = [req.user.userId, name, type, bank_name, balance || 0];
