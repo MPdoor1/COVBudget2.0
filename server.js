@@ -466,6 +466,22 @@ app.post('/api/test-account', async (req, res) => {
   }
 });
 
+// Get users for debugging (REMOVE AFTER DEBUGGING)
+app.get('/api/debug-users', async (req, res) => {
+  try {
+    const result = await query('SELECT id, email, name, created_at FROM users ORDER BY created_at DESC LIMIT 10');
+    res.json({
+      success: true,
+      users: result.rows
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // === PLAID/BANKING ENDPOINTS ===
 
 // Create Plaid Link Token
