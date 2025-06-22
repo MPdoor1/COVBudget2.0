@@ -218,6 +218,18 @@ const mockQuery = async (text, params) => {
     return { rows: [newCategory] };
   }
   
+  // Handle UPDATE accounts (for soft delete)
+  if (text.includes('UPDATE accounts') && text.includes('is_active = false')) {
+    const [accountId, userId] = params;
+    const accountIndex = mockAccounts.findIndex(acc => acc.id === accountId && acc.user_id === userId);
+    if (accountIndex !== -1) {
+      mockAccounts[accountIndex].is_active = false;
+      mockAccounts[accountIndex].updated_at = new Date();
+      return { rows: [mockAccounts[accountIndex]] };
+    }
+    return { rows: [] };
+  }
+  
   // Handle INSERT INTO users (registration)
   if (text.includes('INSERT INTO users')) {
     const [name, email, passwordHash] = params;
@@ -731,7 +743,7 @@ app.post('/api/accounts', authenticateToken, async (req, res) => {
 // Update account
 app.put('/api/accounts/:id', authenticateToken, async (req, res) => {
   try {
-    if (!dbClient) {
+    if (!dbClient && process.env.NODE_ENV !== 'development') {
       return res.status(503).json({ error: 'Database not available' });
     }
     
@@ -759,7 +771,7 @@ app.put('/api/accounts/:id', authenticateToken, async (req, res) => {
 // Delete account (soft delete)
 app.delete('/api/accounts/:id', authenticateToken, async (req, res) => {
   try {
-    if (!dbClient) {
+    if (!dbClient && process.env.NODE_ENV !== 'development') {
       return res.status(503).json({ error: 'Database not available' });
     }
     
@@ -786,7 +798,7 @@ app.delete('/api/accounts/:id', authenticateToken, async (req, res) => {
 // Get transactions
 app.get('/api/transactions', authenticateToken, async (req, res) => {
   try {
-    if (!dbClient) {
+    if (!dbClient && process.env.NODE_ENV !== 'development') {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -842,7 +854,7 @@ app.get('/api/transactions', authenticateToken, async (req, res) => {
 // Update transaction
 app.put('/api/transactions/:id', authenticateToken, async (req, res) => {
   try {
-    if (!dbClient) {
+    if (!dbClient && process.env.NODE_ENV !== 'development') {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -897,7 +909,7 @@ app.put('/api/transactions/:id', authenticateToken, async (req, res) => {
 // Get budget categories
 app.get('/api/budget/categories', authenticateToken, async (req, res) => {
   try {
-    if (!dbClient) {
+    if (!dbClient && process.env.NODE_ENV !== 'development') {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -972,7 +984,7 @@ app.post('/api/budget-categories', authenticateToken, async (req, res) => {
 // Update budget category
 app.put('/api/budget-categories/:id', authenticateToken, async (req, res) => {
   try {
-    if (!dbClient) {
+    if (!dbClient && process.env.NODE_ENV !== 'development') {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -1000,7 +1012,7 @@ app.put('/api/budget-categories/:id', authenticateToken, async (req, res) => {
 // Get spending analysis
 app.get('/api/analytics/spending', authenticateToken, async (req, res) => {
   try {
-    if (!dbClient) {
+    if (!dbClient && process.env.NODE_ENV !== 'development') {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -1075,7 +1087,7 @@ const upload = multer({
 // Bank statement upload endpoint (requires authentication)
 app.post('/api/upload-statement', authenticateToken, upload.single('statement'), async (req, res) => {
   try {
-    if (!dbClient) {
+    if (!dbClient && process.env.NODE_ENV !== 'development') {
       return res.status(503).json({ error: 'Database not available' });
     }
 

@@ -76,11 +76,13 @@
             margin-bottom: 2rem;
             box-shadow: var(--shadow-md);
             overflow-x: auto;
+            flex-wrap: wrap;
+            gap: 0.25rem;
         }
 
         .tab-button {
-            flex: 1;
-            padding: 1rem 1.5rem;
+            flex: 0 0 auto;
+            padding: 0.75rem 1.25rem;
             background: transparent;
             border: none;
             color: var(--text-muted);
@@ -88,11 +90,12 @@
             border-radius: var(--border-radius);
             transition: all 0.3s ease;
             font-weight: 500;
-            min-width: 140px;
+            min-width: 120px;
             display: flex;
             align-items: center;
             gap: 0.5rem;
             justify-content: center;
+            white-space: nowrap;
         }
 
         .tab-button.active {
@@ -212,6 +215,45 @@
             border-left: 4px solid var(--primary-orange);
         }
 
+        .account-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .btn-small {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+            min-width: auto;
+        }
+
+        .bank-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: rgba(210, 105, 30, 0.05);
+            border-radius: var(--border-radius);
+            margin-bottom: 0.5rem;
+            border: 1px solid rgba(210, 105, 30, 0.2);
+        }
+
+        .bank-info h4 {
+            color: var(--text-light);
+            margin: 0 0 0.25rem 0;
+        }
+
+        .bank-info p {
+            color: var(--text-muted);
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        .bank-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
         .account-info h4 {
             color: var(--text-light);
             margin-bottom: 0.25rem;
@@ -226,6 +268,42 @@
             font-size: 1.5rem;
             font-weight: 600;
             color: var(--primary-orange);
+        }
+
+        .account-type-section {
+            margin-bottom: 2rem;
+        }
+
+        .account-type-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            background: rgba(210, 105, 30, 0.1);
+            border-radius: var(--border-radius);
+            border-left: 4px solid var(--primary-orange);
+        }
+
+        .account-type-icon {
+            font-size: 1.25rem;
+            color: var(--primary-orange);
+        }
+
+        .account-type-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-light);
+            margin: 0;
+        }
+
+        .account-type-count {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            background: rgba(210, 105, 30, 0.2);
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            margin-left: auto;
         }
 
         .upload-area {
@@ -364,13 +442,14 @@
             </p>
         </div>
 
-        <div class="tab-navigation">
+        <div class="tab-navigation" id="mainTabNavigation">
             <button class="tab-button active" onclick="switchTab('analytics')">
                 <i class="fas fa-chart-line"></i> Analytics
             </button>
-            <button class="tab-button" onclick="switchTab('accounts')">
-                <i class="fas fa-university"></i> Bank Accounts
+            <button class="tab-button" onclick="switchTab('add-account')">
+                <i class="fas fa-plus"></i> Add Account
             </button>
+            <!-- Bank tabs will be dynamically added here -->
             <button class="tab-button" onclick="switchTab('transactions')">
                 <i class="fas fa-list"></i> Transactions
             </button>
@@ -445,72 +524,79 @@
             </div>
         </div>
 
-        <!-- Bank Accounts Tab -->
-        <div id="accounts" class="tab-content">
-            <div class="cards-grid">
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fas fa-plus card-icon"></i>
-                        <h3 class="card-title">Add New Account</h3>
-                    </div>
-                    <div class="budget-form">
-                        <div class="form-group">
-                            <label>Account Name</label>
-                            <input type="text" id="accountName" placeholder="e.g., Council Checking">
-                        </div>
-                        <div class="form-group">
-                            <label>Account Type</label>
-                            <select id="accountType">
-                                <option value="checking">Checking</option>
-                                <option value="savings">Savings</option>
-                                <option value="credit">Credit Card</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Bank Name</label>
-                            <input type="text" id="bankName" placeholder="e.g., First National Bank">
-                        </div>
-                        <div class="form-group">
-                            <label>Initial Balance</label>
-                            <input type="number" id="initialBalance" placeholder="0.00" step="0.01">
-                        </div>
-                    </div>
-                    <button class="btn" onclick="addAccount()">
-                        <i class="fas fa-plus"></i> Add Account
-                    </button>
-                </div>
-            </div>
-            
+        <!-- Add Account Tab -->
+        <div id="add-account" class="tab-content">
+            <!-- Add New Bank Section -->
             <div class="card">
                 <div class="card-header">
                     <i class="fas fa-university card-icon"></i>
-                    <h3 class="card-title">Your Accounts</h3>
+                    <h3 class="card-title">Create New Bank</h3>
                 </div>
-                <ul class="account-list" id="accountsList">
-                    <!-- Accounts will be loaded here -->
-                </ul>
+                <div class="budget-form">
+                    <div class="form-group">
+                        <label>Bank Name</label>
+                        <input type="text" id="newBankName" placeholder="e.g., Wells Fargo">
+                    </div>
+                    <div class="form-group">
+                        <label>Bank Description (Optional)</label>
+                        <input type="text" id="newBankDescription" placeholder="e.g., Primary banking partner">
+                    </div>
+                </div>
+                <button class="btn" onclick="createBank()">
+                    <i class="fas fa-plus"></i> Create Bank
+                </button>
             </div>
-            
+
+            <!-- Add New Account Section -->
             <div class="card">
                 <div class="card-header">
-                    <i class="fas fa-upload card-icon"></i>
-                    <h3 class="card-title">Upload Bank Statement</h3>
+                    <i class="fas fa-plus card-icon"></i>
+                    <h3 class="card-title">Add New Account</h3>
                 </div>
-                <div class="form-group">
-                    <label>Select Account</label>
-                    <select id="uploadAccountSelect">
-                        <option value="">Choose an account...</option>
-                    </select>
+                <div class="budget-form">
+                    <div class="form-group">
+                        <label>Select Bank</label>
+                        <select id="bankSelect">
+                            <option value="">Choose a bank...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Account Type</label>
+                        <select id="accountType">
+                            <option value="checking">Checking</option>
+                            <option value="savings">Savings</option>
+                            <option value="credit">Credit Card</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Account Name</label>
+                        <input type="text" id="accountName" placeholder="e.g., Primary Checking">
+                    </div>
+                    <div class="form-group">
+                        <label>Initial Balance</label>
+                        <input type="number" id="initialBalance" placeholder="0.00" step="0.01">
+                    </div>
                 </div>
-                <div class="upload-area" onclick="document.getElementById('statementUpload').click()">
-                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
-                    <h4>Drop your bank statement here</h4>
-                    <p>Or click to browse files</p>
-                    <small>Supports CSV, Excel (.xlsx, .xls) - Max 10MB</small>
-                </div>
-                <input type="file" id="statementUpload" style="display: none;" accept=".csv,.xlsx,.xls" onchange="handleStatementUpload(event)">
-                <div id="uploadStatus" style="margin-top: 1rem;"></div>
+                <button class="btn" onclick="addAccount()">
+                    <i class="fas fa-plus"></i> Add Account
+                </button>
             </div>
+
+            <!-- Manage Banks Section -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-cogs card-icon"></i>
+                    <h3 class="card-title">Manage Banks</h3>
+                </div>
+                <div id="banksList">
+                    <!-- Banks will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Dynamic Bank Tabs will be inserted here -->
+        <div id="bankTabsContainer">
+            <!-- Bank-specific tabs will be dynamically created -->
         </div>
 
         <!-- Transactions Tab -->
@@ -644,6 +730,7 @@
         let transactions = [];
         let budgetCategories = [];
         let charts = {};
+        let banks = new Set(); // Track available banks
 
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
@@ -692,7 +779,11 @@
                 const accountsResponse = await fetch('/api/accounts', { headers });
                 if (accountsResponse.ok) {
                     accounts = await accountsResponse.json();
-                    updateAccountsUI();
+                    updateBanksFromAccounts();
+                    createBankTabs();
+                    updateFilterSelects();
+                    updateBankSelector();
+                    updateBanksList();
                 }
                 
                 // Load transactions
@@ -724,8 +815,8 @@
                 case 'analytics':
                     updateAnalytics();
                     break;
-                case 'accounts':
-                    updateAccountsUI();
+                case 'add-account':
+                    // No specific loading needed for add account tab
                     break;
                 case 'transactions':
                     updateTransactionsUI();
@@ -736,6 +827,12 @@
                 case 'actual-budget':
                     updateActualBudgetUI();
                     break;
+                default:
+                    // Check if it's a bank tab
+                    if (tabName.startsWith('bank-')) {
+                        updateBankTabContent(tabName);
+                    }
+                    break;
             }
         }
 
@@ -743,7 +840,7 @@
         async function addAccount() {
             const name = document.getElementById('accountName').value;
             const type = document.getElementById('accountType').value;
-            const bankName = document.getElementById('bankName').value;
+            const bankName = document.getElementById('bankSelect').value;
             const balance = parseFloat(document.getElementById('initialBalance').value) || 0;
             
             if (!name || !type || !bankName) {
@@ -774,10 +871,17 @@
                 
                 if (response.ok) {
                     showMessage('Account added successfully', 'success');
+                    
+                    // Switch to the bank tab for the newly added account
+                    const bankId = bankName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                    
+                    // Clear form
                     document.getElementById('accountName').value = '';
-                    document.getElementById('bankName').value = '';
+                    document.getElementById('bankSelect').value = '';
                     document.getElementById('initialBalance').value = '';
+                    
                     loadDashboardData();
+                    setTimeout(() => switchTab(`bank-${bankId}`), 500);
                 } else {
                     const error = await response.json();
                     throw new Error(error.error || 'Failed to add account');
@@ -788,9 +892,9 @@
         }
 
         // Statement upload
-        async function handleStatementUpload(event) {
+        async function handleStatementUpload(event, bankId) {
             const file = event.target.files[0];
-            const accountId = document.getElementById('uploadAccountSelect').value;
+            const accountId = document.getElementById(`uploadAccountSelect-${bankId}`).value;
             
             if (!file || !accountId) {
                 showMessage('Please select both a file and an account', 'error');
@@ -873,32 +977,346 @@
         }
 
         // UI Update functions
-        function updateAccountsUI() {
-            const accountsList = document.getElementById('accountsList');
-            const uploadSelect = document.getElementById('uploadAccountSelect');
-            const filterSelect = document.getElementById('filterAccount');
-            
-            accountsList.innerHTML = '';
-            uploadSelect.innerHTML = '<option value="">Choose an account...</option>';
-            filterSelect.innerHTML = '<option value="">All Accounts</option>';
-            
+        function createBankTabs() {
+            // Group accounts by bank
+            const bankGroups = {};
             accounts.forEach(account => {
-                // Account list item
-                const li = document.createElement('li');
-                li.className = 'account-item';
-                li.innerHTML = `
-                    <div class="account-info">
-                        <h4>${account.name}</h4>
-                        <p>${account.bank_name} • ${account.type}</p>
-                    </div>
-                    <div class="account-balance">$${parseFloat(account.balance || 0).toFixed(2)}</div>
-                `;
-                accountsList.appendChild(li);
-                
-                // Select options
-                uploadSelect.innerHTML += `<option value="${account.id}">${account.name}</option>`;
-                filterSelect.innerHTML += `<option value="${account.id}">${account.name}</option>`;
+                const bankName = account.bank_name || 'Unknown Bank';
+                if (!bankGroups[bankName]) {
+                    bankGroups[bankName] = [];
+                }
+                bankGroups[bankName].push(account);
             });
+
+            // Clear existing bank tabs
+            const existingBankTabs = document.querySelectorAll('[data-bank-tab]');
+            existingBankTabs.forEach(tab => tab.remove());
+            
+            const existingBankContent = document.querySelectorAll('[data-bank-content]');
+            existingBankContent.forEach(content => content.remove());
+
+            // Create tabs for each bank
+            const tabNavigation = document.getElementById('mainTabNavigation');
+            const transactionsButton = tabNavigation.querySelector('button[onclick="switchTab(\'transactions\')"]');
+            const bankTabsContainer = document.getElementById('bankTabsContainer');
+
+            Object.keys(bankGroups).forEach(bankName => {
+                const bankId = bankName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                
+                // Create tab button
+                const tabButton = document.createElement('button');
+                tabButton.className = 'tab-button';
+                tabButton.setAttribute('data-bank-tab', bankId);
+                tabButton.onclick = () => switchTab(`bank-${bankId}`);
+                tabButton.innerHTML = `<i class="fas fa-university"></i> ${bankName}`;
+                
+                // Insert before transactions button
+                tabNavigation.insertBefore(tabButton, transactionsButton);
+
+                // Create tab content
+                const tabContent = document.createElement('div');
+                tabContent.id = `bank-${bankId}`;
+                tabContent.className = 'tab-content';
+                tabContent.setAttribute('data-bank-content', bankId);
+                
+                tabContent.innerHTML = `
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-university card-icon"></i>
+                            <h3 class="card-title">${bankName} Accounts</h3>
+                        </div>
+                        <div id="accountsByType-${bankId}">
+                            <!-- Account types will be organized here -->
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-upload card-icon"></i>
+                            <h3 class="card-title">Upload Bank Statement</h3>
+                        </div>
+                        <div class="form-group">
+                            <label>Select Account</label>
+                            <select id="uploadAccountSelect-${bankId}">
+                                <option value="">Choose an account...</option>
+                            </select>
+                        </div>
+                        <div class="upload-area" onclick="document.getElementById('statementUpload-${bankId}').click()">
+                            <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                            <h4>Drop your bank statement here</h4>
+                            <p>Or click to browse files</p>
+                            <small>Supports CSV, Excel (.xlsx, .xls) - Max 10MB</small>
+                        </div>
+                        <input type="file" id="statementUpload-${bankId}" style="display: none;" accept=".csv,.xlsx,.xls" onchange="handleStatementUpload(event, '${bankId}')">
+                        <div id="uploadStatus-${bankId}" style="margin-top: 1rem;"></div>
+                    </div>
+                `;
+                
+                bankTabsContainer.appendChild(tabContent);
+            });
+
+            // Update content for each bank
+            Object.keys(bankGroups).forEach(bankName => {
+                const bankId = bankName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                updateBankTabContent(`bank-${bankId}`);
+            });
+        }
+
+        function updateBankTabContent(tabName) {
+            const bankId = tabName.replace('bank-', '');
+            const bankName = Object.keys(getBankGroups()).find(name => 
+                name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') === bankId
+            );
+            
+            if (!bankName) return;
+
+            const bankAccounts = getBankGroups()[bankName];
+            const accountsByTypeContainer = document.getElementById(`accountsByType-${bankId}`);
+            const uploadSelect = document.getElementById(`uploadAccountSelect-${bankId}`);
+            
+            // Group accounts by type
+            const accountTypes = {
+                checking: { accounts: [], icon: 'fas fa-university', name: 'Checking Accounts' },
+                savings: { accounts: [], icon: 'fas fa-piggy-bank', name: 'Savings Accounts' },
+                credit: { accounts: [], icon: 'fas fa-credit-card', name: 'Credit Accounts' }
+            };
+
+            bankAccounts.forEach(account => {
+                const accountType = account.type.toLowerCase();
+                if (accountTypes[accountType]) {
+                    accountTypes[accountType].accounts.push(account);
+                } else {
+                    // Handle unknown account types
+                    if (!accountTypes.other) {
+                        accountTypes.other = { accounts: [], icon: 'fas fa-wallet', name: 'Other Accounts' };
+                    }
+                    accountTypes.other.accounts.push(account);
+                }
+            });
+
+            if (accountsByTypeContainer) {
+                accountsByTypeContainer.innerHTML = '';
+                
+                // Create sections for each account type that has accounts
+                Object.keys(accountTypes).forEach(typeKey => {
+                    const typeData = accountTypes[typeKey];
+                    if (typeData.accounts.length > 0) {
+                        const section = document.createElement('div');
+                        section.className = 'account-type-section';
+                        
+                        section.innerHTML = `
+                            <div class="account-type-header">
+                                <i class="${typeData.icon} account-type-icon"></i>
+                                <h4 class="account-type-title">${typeData.name}</h4>
+                                <span class="account-type-count">${typeData.accounts.length}</span>
+                            </div>
+                            <ul class="account-list" id="accountsList-${bankId}-${typeKey}">
+                            </ul>
+                        `;
+                        
+                        accountsByTypeContainer.appendChild(section);
+                        
+                        // Add accounts to this type section
+                        const accountsList = document.getElementById(`accountsList-${bankId}-${typeKey}`);
+                        typeData.accounts.forEach(account => {
+                            const li = document.createElement('li');
+                            li.className = 'account-item';
+                            li.innerHTML = `
+                                <div class="account-info">
+                                    <h4>${account.name}</h4>
+                                    <p>Account #${account.id.slice(-4)} • ${getAccountTypeDisplayName(account.type)}</p>
+                                </div>
+                                <div class="account-actions">
+                                    <div class="account-balance">$${parseFloat(account.balance || 0).toFixed(2)}</div>
+                                    <button class="btn btn-secondary btn-small" onclick="deleteAccount('${account.id}', '${account.name}')" title="Delete Account">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            `;
+                            accountsList.appendChild(li);
+                        });
+                    }
+                });
+            }
+
+            // Update upload select
+            if (uploadSelect) {
+                uploadSelect.innerHTML = '<option value="">Choose an account...</option>';
+                bankAccounts.forEach(account => {
+                    const typeLabel = getAccountTypeDisplayName(account.type);
+                    uploadSelect.innerHTML += `<option value="${account.id}">${account.name} (${typeLabel})</option>`;
+                });
+            }
+        }
+
+        function getAccountTypeDisplayName(type) {
+            const typeMap = {
+                checking: 'Checking',
+                savings: 'Savings',
+                credit: 'Credit Card'
+            };
+            return typeMap[type.toLowerCase()] || type;
+        }
+
+        // Bank Management Functions
+        function updateBanksFromAccounts() {
+            banks.clear();
+            accounts.forEach(account => {
+                if (account.bank_name && account.bank_name.trim()) {
+                    banks.add(account.bank_name.trim());
+                }
+            });
+        }
+
+        function updateBankSelector() {
+            const bankSelect = document.getElementById('bankSelect');
+            if (bankSelect) {
+                bankSelect.innerHTML = '<option value="">Choose a bank...</option>';
+                Array.from(banks).sort().forEach(bankName => {
+                    bankSelect.innerHTML += `<option value="${bankName}">${bankName}</option>`;
+                });
+            }
+        }
+
+        function updateBanksList() {
+            const banksList = document.getElementById('banksList');
+            if (banksList) {
+                banksList.innerHTML = '';
+                
+                if (banks.size === 0) {
+                    banksList.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No banks created yet.</p>';
+                    return;
+                }
+
+                Array.from(banks).sort().forEach(bankName => {
+                    const bankAccounts = accounts.filter(acc => acc.bank_name && acc.bank_name.trim() === bankName);
+                    const div = document.createElement('div');
+                    div.className = 'bank-item';
+                    div.innerHTML = `
+                        <div class="bank-info">
+                            <h4>${bankName}</h4>
+                            <p>${bankAccounts.length} account${bankAccounts.length !== 1 ? 's' : ''}</p>
+                        </div>
+                        <div class="bank-actions">
+                            <button class="btn btn-secondary btn-small" onclick="deleteBank('${bankName}')" title="Delete Bank">
+                                <i class="fas fa-trash"></i> Delete Bank
+                            </button>
+                        </div>
+                    `;
+                    banksList.appendChild(div);
+                });
+            }
+        }
+
+        async function createBank() {
+            const bankName = document.getElementById('newBankName').value.trim();
+            const bankDescription = document.getElementById('newBankDescription').value.trim();
+            
+            if (!bankName) {
+                showMessage('Please enter a bank name', 'error');
+                return;
+            }
+
+            if (banks.has(bankName)) {
+                showMessage('Bank already exists', 'error');
+                return;
+            }
+
+            // Add to banks set
+            banks.add(bankName);
+            
+            // Clear form
+            document.getElementById('newBankName').value = '';
+            document.getElementById('newBankDescription').value = '';
+            
+            // Update UI
+            updateBankSelector();
+            updateBanksList();
+            createBankTabs();
+            
+            showMessage(`Bank "${bankName}" created successfully`, 'success');
+        }
+
+        async function deleteBank(bankName) {
+            const bankAccounts = accounts.filter(acc => acc.bank_name && acc.bank_name.trim() === bankName);
+            
+            if (bankAccounts.length > 0) {
+                const confirmDelete = confirm(`This bank has ${bankAccounts.length} account(s). Deleting the bank will also delete all its accounts. Are you sure?`);
+                if (!confirmDelete) return;
+                
+                // Delete all accounts for this bank
+                for (const account of bankAccounts) {
+                    await deleteAccountFromServer(account.id);
+                }
+            } else {
+                const confirmDelete = confirm(`Are you sure you want to delete "${bankName}"?`);
+                if (!confirmDelete) return;
+            }
+
+            // Remove from banks set
+            banks.delete(bankName);
+            
+            // Reload data to refresh UI
+            await loadDashboardData();
+            
+            showMessage(`Bank "${bankName}" deleted successfully`, 'success');
+        }
+
+        async function deleteAccount(accountId, accountName) {
+            const confirmDelete = confirm(`Are you sure you want to delete "${accountName}"?`);
+            if (!confirmDelete) return;
+
+            await deleteAccountFromServer(accountId);
+            await loadDashboardData();
+            showMessage(`Account "${accountName}" deleted successfully`, 'success');
+        }
+
+        async function deleteAccountFromServer(accountId) {
+            try {
+                let token = localStorage.getItem('authToken');
+                if (!token) {
+                    token = 'mock-token';
+                    localStorage.setItem('authToken', token);
+                }
+
+                const response = await fetch(`/api/accounts/${accountId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to delete account');
+                }
+            } catch (error) {
+                showMessage('Error deleting account: ' + error.message, 'error');
+                throw error;
+            }
+        }
+
+        function getBankGroups() {
+            const bankGroups = {};
+            accounts.forEach(account => {
+                const bankName = account.bank_name || 'Unknown Bank';
+                if (!bankGroups[bankName]) {
+                    bankGroups[bankName] = [];
+                }
+                bankGroups[bankName].push(account);
+            });
+            return bankGroups;
+        }
+
+        function updateFilterSelects() {
+            const filterSelect = document.getElementById('filterAccount');
+            if (filterSelect) {
+                filterSelect.innerHTML = '<option value="">All Accounts</option>';
+                accounts.forEach(account => {
+                    filterSelect.innerHTML += `<option value="${account.id}">${account.name} (${account.bank_name})</option>`;
+                });
+            }
         }
 
         function updateTransactionsUI() {
