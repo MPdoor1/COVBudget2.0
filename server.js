@@ -650,7 +650,11 @@ app.post('/api/accounts', authenticateToken, async (req, res) => {
     
     res.status(500).json({ 
       error: 'Failed to create account',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      details: error.message,
+      code: error.code,
+      constraint: error.constraint,
+      table: error.table,
+      column: error.column,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
