@@ -1326,45 +1326,102 @@ function parseWellsFargoRow(row, rowIndex) {
   const keys = Object.keys(row);
   const values = Object.values(row);
   
+  console.log('Row keys:', keys);
+  console.log('Row values:', values);
+  
   try {
-    // Wells Fargo format:
-    // A1 (column 0): Date starts here
-    // B2 (column 1): Amount starts here (from row 2, so rowIndex >= 2)
-    // E1 (column 4): Description starts here
+    // Wells Fargo format can vary, but typically:
+    // Column A: Date
+    // Column B: Amount  
+    // Column E: Description
+    // However, the CSV might not have headers, so we need to be flexible
     
     let date = null;
     let amount = null;
     let description = null;
     
-    // Get date from column A (index 0)
-    if (values[0]) {
-      date = parseDate(values[0]);
+    // Try to find date - look for date pattern in any column
+    for (let i = 0; i < values.length; i++) {
+      if (values[i] && typeof values[i] === 'string' && values[i].match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/)) {
+        try {
+          date = parseDate(values[i]);
+          console.log(`Found date in column ${i}:`, values[i]);
+          break;
+        } catch (error) {
+          continue;
+        }
+      }
     }
     
-    // Get amount from column B (index 1) - but only from row 2 onwards
-    if (rowIndex >= 2 && values[1]) {
-      amount = parseFloat(String(values[1]).replace(/[,$\s]/g, ''));
-      // Wells Fargo: positive = income, negative = expense (keep as is)
+    // Try to find amount - look for numeric values that could be amounts
+    for (let i = 0; i < values.length; i++) {
+      if (values[i] !== null && values[i] !== undefined && values[i] !== '') {
+        const cleanAmount = String(values[i]).replace(/[,$\s]/g, '');
+        const testAmount = parseFloat(cleanAmount);
+        if (!isNaN(testAmount) && testAmount !== 0 && Math.abs(testAmount) > 0.01) {
+          // Make sure this isn't a date that looks like a number
+          if (!String(values[i]).match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/)) {
+            amount = testAmount;
+            console.log(`Found amount in column ${i}:`, values[i], '-> parsed as:', amount);
+            break;
+          }
+        }
+      }
     }
     
-    // Get description from column E (index 4)
-    if (values[4]) {
+    // Wells Fargo specific format: A=Date, B=Amount, C=*, D=Empty, E=Description
+    // Try to get description from column E (index 4) first
+    if (values.length > 4 && values[4] && String(values[4]).trim() && String(values[4]).trim() !== '*') {
       description = String(values[4]).trim();
+      console.log(`Found description in column 4 (E):`, description);
+    } else {
+      // Fallback: look for the longest meaningful text field
+      let longestText = '';
+      for (let i = 0; i < values.length; i++) {
+        if (values[i] && typeof values[i] === 'string' && values[i].length > longestText.length) {
+          const text = String(values[i]).trim();
+          // Skip if this looks like a date
+          if (text.match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/)) {
+            continue;
+          }
+          // Skip if this looks like a pure number (amount)
+          const cleanValue = text.replace(/[,$\s]/g, '');
+          if (!isNaN(parseFloat(cleanValue)) && cleanValue === parseFloat(cleanValue).toString()) {
+            continue;
+          }
+          // Skip if it's just "*" or empty
+          if (text === '*' || text === '') {
+            continue;
+          }
+          longestText = text;
+        }
+      }
+      description = longestText;
+      
+      if (description) {
+        console.log(`Found description in longest text field:`, description);
+      }
     }
     
     console.log(`Wells Fargo parsed: date=${date}, amount=${amount}, description=${description}`);
     
+    // Debug the validation criteria
+    console.log(`Validation check: date=${!!date}, amount=${!isNaN(amount)}, amount!=0=${amount !== 0}, description=${!!description}, desc.length=${description ? description.length : 0}`);
+    
     if (date && !isNaN(amount) && amount !== 0 && description && description.length > 1) {
       const category = categorizeTransaction(description);
-      return {
+      const transaction = {
         date: date,
         description: description,
         amount: amount,
         category: category,
         merchant: extractMerchant(description)
       };
+      console.log(`✓ Valid transaction created:`, transaction);
+      return transaction;
     }
     
+    console.log(`✗ Transaction validation failed`);
     return null;
   } catch (error) {
     console.warn(`Failed to parse Wells Fargo row ${rowIndex}:`, error.message);
