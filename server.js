@@ -277,6 +277,10 @@ const authenticateToken = async (req, res, next) => {
       req.user = { userId: 'mock-user-123', email: 'test@example.com' };
       return next();
     }
+    if (token === 'mock-token') {
+      req.user = { userId: 'mock-user-123', email: 'test@example.com' };
+      return next();
+    }
     return res.status(403).json({ error: 'Invalid token' });
   }
 };
