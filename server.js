@@ -1095,7 +1095,7 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const { account_id, accountName = 'Unknown Account' } = req.body;
+    const { account_id, accountName = 'Unknown Account', format } = req.body;
     
     // Verify account ownership if account_id is provided
     if (account_id && dbClient) {
@@ -1119,11 +1119,11 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
 
     try {
       if (fileExt === '.csv') {
-        // Parse CSV file
-        transactions = await parseCSVFile(filePath);
+        // Parse CSV file with format specification
+        transactions = await parseCSVFile(filePath, format);
       } else if (fileExt === '.xlsx' || fileExt === '.xls') {
-        // Parse Excel file
-        transactions = await parseExcelFile(filePath);
+        // Parse Excel file with format specification
+        transactions = await parseExcelFile(filePath, format);
       }
 
       if (transactions.length === 0) {
@@ -1229,11 +1229,13 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
 });
 
 // Helper function to parse CSV files
-function parseCSVFile(filePath) {
+function parseCSVFile(filePath, format = null) {
   return new Promise((resolve, reject) => {
     const transactions = [];
     let rowCount = 0;
     let hasHeaders = false;
+    
+    console.log(`Parsing CSV file with format: ${format || 'auto-detect'}`);
     
     fs.createReadStream(filePath)
       .pipe(csv())
@@ -1256,7 +1258,13 @@ function parseCSVFile(filePath) {
             return;
           }
           
-          const transaction = parseTransactionRow(row);
+          let transaction;
+          if (format === 'wells_fargo') {
+            transaction = parseWellsFargoRow(row, rowCount);
+          } else {
+            transaction = parseTransactionRow(row);
+          }
+          
           if (transaction) {
             transactions.push(transaction);
             console.log('Successfully parsed transaction:', transaction);
@@ -1276,17 +1284,27 @@ function parseCSVFile(filePath) {
 }
 
 // Helper function to parse Excel files
-function parseExcelFile(filePath) {
+function parseExcelFile(filePath, format = null) {
   try {
+    console.log(`Parsing Excel file with format: ${format || 'auto-detect'}`);
+    
     const workbook = xlsx.readFile(filePath);
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const jsonData = xlsx.utils.sheet_to_json(worksheet);
     
     const transactions = [];
+    let rowIndex = 0;
     for (const row of jsonData) {
       try {
-        const transaction = parseTransactionRow(row);
+        rowIndex++;
+        let transaction;
+        if (format === 'wells_fargo') {
+          transaction = parseWellsFargoRow(row, rowIndex);
+        } else {
+          transaction = parseTransactionRow(row);
+        }
+        
         if (transaction) {
           transactions.push(transaction);
         }
@@ -1298,6 +1316,59 @@ function parseExcelFile(filePath) {
     return transactions;
   } catch (error) {
     throw new Error(`Failed to parse Excel file: ${error.message}`);
+  }
+}
+
+// Helper function to parse Wells Fargo specific format
+function parseWellsFargoRow(row, rowIndex) {
+  console.log(`Parsing Wells Fargo row ${rowIndex}:`, row);
+  
+  const keys = Object.keys(row);
+  const values = Object.values(row);
+  
+  try {
+    // Wells Fargo format:
+    // A1 (column 0): Date starts here
+    // B2 (column 1): Amount starts here (from row 2, so rowIndex >= 2)
+    // E1 (column 4): Description starts here
+    
+    let date = null;
+    let amount = null;
+    let description = null;
+    
+    // Get date from column A (index 0)
+    if (values[0]) {
+      date = parseDate(values[0]);
+    }
+    
+    // Get amount from column B (index 1) - but only from row 2 onwards
+    if (rowIndex >= 2 && values[1]) {
+      amount = parseFloat(String(values[1]).replace(/[,$\s]/g, ''));
+      // Wells Fargo: positive = income, negative = expense (keep as is)
+    }
+    
+    // Get description from column E (index 4)
+    if (values[4]) {
+      description = String(values[4]).trim();
+    }
+    
+    console.log(`Wells Fargo parsed: date=${date}, amount=${amount}, description=${description}`);
+    
+    if (date && !isNaN(amount) && amount !== 0 && description && description.length > 1) {
+      const category = categorizeTransaction(description);
+      return {
+        date: date,
+        description: description,
+        amount: amount,
+        category: category,
+        merchant: extractMerchant(description)
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn(`Failed to parse Wells Fargo row ${rowIndex}:`, error.message);
+    return null;
   }
 }
 

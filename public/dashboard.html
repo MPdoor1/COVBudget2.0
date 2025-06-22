@@ -1045,9 +1045,70 @@
             }
         }
 
-        // Statement upload
-        async function handleStatementUpload(event, bankId) {
+        // Global variable to store the selected file
+        let selectedFiles = {};
+
+        // Preview file before upload
+        async function previewStatementFile(event, bankId) {
             const file = event.target.files[0];
+            
+            if (!file) {
+                return;
+            }
+            
+            // Store the file for later upload
+            selectedFiles[bankId] = file;
+            
+            // Show file name
+            document.getElementById(`fileName-${bankId}`).textContent = `📄 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+            
+            // Read and preview file content
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                let preview = '';
+                
+                if (file.name.toLowerCase().endsWith('.csv')) {
+                    // Preview CSV content
+                    const lines = content.split('\n').slice(0, 10); // Show first 10 lines
+                    preview = lines.map((line, index) => {
+                        const cols = line.split(',');
+                        let displayLine = '';
+                        
+                        // Highlight Wells Fargo format columns
+                        cols.forEach((col, colIndex) => {
+                            const colLetter = String.fromCharCode(65 + colIndex); // A, B, C, D, E...
+                            let cellClass = '';
+                            
+                            if (colLetter === 'A' && index >= 0) { // Date column
+                                cellClass = 'style="color: var(--primary-gold); font-weight: bold;"';
+                            } else if (colLetter === 'B' && index >= 1) { // Amount column
+                                cellClass = 'style="color: var(--secondary-gold); font-weight: bold;"';
+                            } else if (colLetter === 'E' && index >= 0) { // Description column
+                                cellClass = 'style="color: var(--text-light); font-weight: bold;"';
+                            }
+                            
+                            displayLine += `<span ${cellClass}>${colLetter}${index + 1}: ${col.trim()}</span>  `;
+                        });
+                        
+                        return `Row ${index + 1}: ${displayLine}`;
+                    }).join('\n');
+                } else {
+                    preview = 'Excel file selected. Content will be processed during upload.';
+                }
+                
+                document.getElementById(`fileContent-${bankId}`).innerHTML = `<pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;">${preview}</pre>`;
+                
+                // Show preview section
+                document.getElementById(`filePreview-${bankId}`).style.display = 'block';
+            };
+            
+            reader.readAsText(file);
+        }
+
+        // Process the uploaded file
+        async function processStatementUpload(bankId) {
+            const file = selectedFiles[bankId];
             const accountId = document.getElementById(`uploadAccountSelect-${bankId}`).value;
             
             if (!file || !accountId) {
@@ -1058,6 +1119,7 @@
             const formData = new FormData();
             formData.append('statement', file);
             formData.append('account_id', accountId);
+            formData.append('format', 'wells_fargo'); // Specify Wells Fargo format
             
             try {
                 let token = localStorage.getItem('authToken');
@@ -1065,6 +1127,13 @@
                     token = 'mock-token';
                     localStorage.setItem('authToken', token);
                 }
+                
+                // Show loading status
+                document.getElementById(`uploadStatus-${bankId}`).innerHTML = `
+                    <div style="color: var(--primary-gold); padding: 1rem; background: rgba(255, 215, 0, 0.1); border-radius: 8px; border: 1px solid var(--dark-gold);">
+                        <i class="fas fa-spinner fa-spin"></i> Processing ${file.name}...
+                    </div>
+                `;
                 
                 const response = await fetch('/api/upload-statement', {
                     method: 'POST',
@@ -1077,14 +1146,44 @@
                 if (response.ok) {
                     const result = await response.json();
                     showMessage(`Statement uploaded successfully! ${result.transactions_count} transactions processed.`, 'success');
+                    
+                    // Hide preview and reset
+                    cancelFileUpload(bankId);
                     loadDashboardData();
+                    
+                    // Show success status
+                    document.getElementById(`uploadStatus-${bankId}`).innerHTML = `
+                        <div style="color: var(--success-gold); padding: 1rem; background: rgba(255, 215, 0, 0.1); border-radius: 8px; border: 1px solid var(--dark-gold);">
+                            <i class="fas fa-check-circle"></i> Successfully processed ${result.transactions_count} transactions from ${file.name}
+                        </div>
+                    `;
                 } else {
                     const error = await response.json();
                     throw new Error(error.error || 'Upload failed');
                 }
             } catch (error) {
                 showMessage('Upload error: ' + error.message, 'error');
+                document.getElementById(`uploadStatus-${bankId}`).innerHTML = `
+                    <div style="color: var(--error-red); padding: 1rem; background: rgba(255, 68, 68, 0.1); border-radius: 8px; border: 1px solid var(--error-red);">
+                        <i class="fas fa-exclamation-triangle"></i> Upload failed: ${error.message}
+                    </div>
+                `;
             }
+        }
+
+        // Cancel file upload
+        function cancelFileUpload(bankId) {
+            // Hide preview
+            document.getElementById(`filePreview-${bankId}`).style.display = 'none';
+            
+            // Clear file input
+            document.getElementById(`statementUpload-${bankId}`).value = '';
+            
+            // Clear stored file
+            delete selectedFiles[bankId];
+            
+            // Clear status
+            document.getElementById(`uploadStatus-${bankId}`).innerHTML = '';
         }
 
         // Budget category management
@@ -1201,7 +1300,26 @@
                             <p>Or click to browse files</p>
                             <small>Supports CSV, Excel (.xlsx, .xls) - Max 10MB</small>
                         </div>
-                        <input type="file" id="statementUpload-${bankId}" style="display: none;" accept=".csv,.xlsx,.xls" onchange="handleStatementUpload(event, '${bankId}')">
+                        <input type="file" id="statementUpload-${bankId}" style="display: none;" accept=".csv,.xlsx,.xls" onchange="previewStatementFile(event, '${bankId}')">
+                        
+                        <div id="filePreview-${bankId}" style="display: none; margin-top: 1rem;">
+                            <div class="card" style="background: rgba(255, 215, 0, 0.05); border: 1px solid var(--dark-gold);">
+                                <h4 style="color: var(--primary-gold); margin-bottom: 1rem;">
+                                    <i class="fas fa-eye"></i> File Preview
+                                </h4>
+                                <div id="fileName-${bankId}" style="margin-bottom: 1rem; font-weight: 600;"></div>
+                                <div id="fileContent-${bankId}" style="max-height: 300px; overflow-y: auto; background: var(--dark-black); padding: 1rem; border-radius: 8px; font-family: monospace; font-size: 0.9rem; border: 1px solid var(--dark-gold);"></div>
+                                <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+                                    <button class="btn" onclick="processStatementUpload('${bankId}')">
+                                        <i class="fas fa-upload"></i> Upload & Process
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="cancelFileUpload('${bankId}')">
+                                        <i class="fas fa-times"></i> Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div id="uploadStatus-${bankId}" style="margin-top: 1rem;"></div>
                     </div>
                 `;
