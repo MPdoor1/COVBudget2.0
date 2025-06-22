@@ -9,25 +9,27 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
-            --primary-orange: #D2691E;
-            --secondary-orange: #CD853F;
-            --dark-brown: #2F1B14;
-            --medium-brown: #4A2C2A;
-            --light-brown: #8B4513;
-            --cream: #FDF5E6;
-            --dark-bg: #1A0F0A;
-            --card-bg: #2D1B12;
-            --text-light: #FDF5E6;
-            --text-muted: #CD853F;
+            --primary-gold: #FFD700;
+            --secondary-gold: #FFA500;
+            --dark-gold: #B8860B;
+            --light-gold: #FFFFE0;
+            --black: #000000;
+            --dark-black: #1a1a1a;
+            --medium-black: #2d2d2d;
+            --light-black: #404040;
+            --text-light: #FFFFFF;
+            --text-gold: #FFD700;
+            --text-muted: #CCCCCC;
             --accent-gold: #DAA520;
-            --success-orange: #FF8C42;
-            --warning-amber: #FFA500;
-            --error-red: #DC143C;
-            --gradient-primary: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange));
-            --gradient-bg: linear-gradient(135deg, var(--dark-bg) 0%, var(--dark-brown) 50%, var(--medium-brown) 100%);
-            --gradient-card: linear-gradient(145deg, var(--card-bg), var(--medium-brown));
+            --success-gold: #FFD700;
+            --warning-gold: #FFA500;
+            --error-red: #FF4444;
+            --gradient-primary: linear-gradient(135deg, var(--primary-gold), var(--secondary-gold));
+            --gradient-bg: linear-gradient(135deg, var(--black) 0%, var(--dark-black) 50%, var(--medium-black) 100%);
+            --gradient-card: linear-gradient(145deg, var(--dark-black), var(--medium-black));
             --border-radius: 12px;
-            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.15);
+            --shadow-md: 0 4px 16px rgba(255, 215, 0, 0.15);
+            --shadow-gold: 0 4px 16px rgba(255, 215, 0, 0.25);
         }
 
         * {
@@ -36,16 +38,25 @@
             box-sizing: border-box;
         }
 
+        html {
+            overflow-x: hidden;
+        }
+
         body {
             font-family: 'Inter', sans-serif;
             background: var(--gradient-bg);
             color: var(--text-light);
             line-height: 1.6;
+            width: 100%;
+            overflow-x: hidden;
         }
 
         .dashboard-container {
-            padding-top: 80px;
+            padding: 2rem 1rem;
             min-height: 100vh;
+            max-width: 100%;
+            width: 100%;
+            overflow-x: hidden;
         }
 
         .dashboard-header {
@@ -59,8 +70,9 @@
         .dashboard-title {
             font-size: 2.5rem;
             font-weight: 700;
-            color: var(--primary-orange);
+            color: var(--primary-gold);
             margin-bottom: 0.5rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .dashboard-subtitle {
@@ -70,14 +82,15 @@
 
         .tab-navigation {
             display: flex;
-            background: var(--card-bg);
+            background: var(--dark-black);
             border-radius: var(--border-radius);
             padding: 0.5rem;
             margin-bottom: 2rem;
-            box-shadow: var(--shadow-md);
+            box-shadow: var(--shadow-gold);
             overflow-x: auto;
             flex-wrap: wrap;
             gap: 0.25rem;
+            border: 1px solid var(--dark-gold);
         }
 
         .tab-button {
@@ -106,8 +119,8 @@
         }
 
         .tab-button:hover:not(.active) {
-            background: rgba(210, 105, 30, 0.1);
-            color: var(--primary-orange);
+            background: rgba(255, 215, 0, 0.1);
+            color: var(--primary-gold);
         }
 
         .tab-content {
@@ -130,14 +143,15 @@
             background: var(--gradient-card);
             border-radius: var(--border-radius);
             padding: 2rem;
-            box-shadow: var(--shadow-md);
-            border: 1px solid rgba(210, 105, 30, 0.2);
+            box-shadow: var(--shadow-gold);
+            border: 1px solid var(--dark-gold);
             transition: all 0.3s ease;
         }
 
         .card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3);
+            border-color: var(--primary-gold);
         }
 
         .card-header {
@@ -149,7 +163,8 @@
 
         .card-icon {
             font-size: 2rem;
-            color: var(--primary-orange);
+            color: var(--primary-gold);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .card-title {
@@ -161,8 +176,9 @@
         .metric-value {
             font-size: 2.5rem;
             font-weight: 700;
-            color: var(--primary-orange);
+            color: var(--primary-gold);
             margin-bottom: 0.5rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .metric-label {
@@ -191,13 +207,13 @@
 
         .btn-secondary {
             background: transparent;
-            border: 2px solid var(--primary-orange);
-            color: var(--primary-orange);
+            border: 2px solid var(--primary-gold);
+            color: var(--primary-gold);
         }
 
         .btn-secondary:hover {
-            background: var(--primary-orange);
-            color: white;
+            background: var(--primary-gold);
+            color: var(--black);
         }
 
         .account-list {
@@ -209,10 +225,11 @@
             justify-content: space-between;
             align-items: center;
             padding: 1rem;
-            background: rgba(210, 105, 30, 0.1);
+            background: rgba(255, 215, 0, 0.1);
             border-radius: var(--border-radius);
             margin-bottom: 1rem;
-            border-left: 4px solid var(--primary-orange);
+            border-left: 4px solid var(--primary-gold);
+            border: 1px solid rgba(255, 215, 0, 0.2);
         }
 
         .account-actions {
@@ -232,10 +249,10 @@
             justify-content: space-between;
             align-items: center;
             padding: 1rem;
-            background: rgba(210, 105, 30, 0.05);
+            background: rgba(255, 215, 0, 0.05);
             border-radius: var(--border-radius);
             margin-bottom: 0.5rem;
-            border: 1px solid rgba(210, 105, 30, 0.2);
+            border: 1px solid rgba(255, 215, 0, 0.2);
         }
 
         .bank-info h4 {
@@ -267,7 +284,8 @@
         .account-balance {
             font-size: 1.5rem;
             font-weight: 600;
-            color: var(--primary-orange);
+            color: var(--primary-gold);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .account-type-section {
@@ -280,14 +298,16 @@
             gap: 0.75rem;
             margin-bottom: 1rem;
             padding: 0.75rem 1rem;
-            background: rgba(210, 105, 30, 0.1);
+            background: rgba(255, 215, 0, 0.1);
             border-radius: var(--border-radius);
-            border-left: 4px solid var(--primary-orange);
+            border-left: 4px solid var(--primary-gold);
+            border: 1px solid rgba(255, 215, 0, 0.2);
         }
 
         .account-type-icon {
             font-size: 1.25rem;
-            color: var(--primary-orange);
+            color: var(--primary-gold);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .account-type-title {
@@ -299,39 +319,43 @@
 
         .account-type-count {
             font-size: 0.9rem;
-            color: var(--text-muted);
-            background: rgba(210, 105, 30, 0.2);
+            color: var(--black);
+            background: var(--primary-gold);
             padding: 0.25rem 0.5rem;
             border-radius: 12px;
             margin-left: auto;
+            font-weight: 600;
         }
 
         .upload-area {
-            border: 2px dashed var(--primary-orange);
+            border: 2px dashed var(--primary-gold);
             border-radius: var(--border-radius);
             padding: 2rem;
             text-align: center;
             cursor: pointer;
             transition: all 0.3s ease;
-            background: rgba(210, 105, 30, 0.05);
+            background: rgba(255, 215, 0, 0.05);
         }
 
         .upload-area:hover {
-            background: rgba(210, 105, 30, 0.1);
-            border-color: var(--secondary-orange);
+            background: rgba(255, 215, 0, 0.1);
+            border-color: var(--secondary-gold);
+            box-shadow: 0 4px 16px rgba(255, 215, 0, 0.2);
         }
 
         .upload-icon {
             font-size: 3rem;
-            color: var(--primary-orange);
+            color: var(--primary-gold);
             margin-bottom: 1rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .table-container {
-            background: var(--card-bg);
+            background: var(--dark-black);
             border-radius: var(--border-radius);
             overflow: hidden;
-            box-shadow: var(--shadow-md);
+            box-shadow: var(--shadow-gold);
+            border: 1px solid var(--dark-gold);
         }
 
         .table {
@@ -343,24 +367,24 @@
         .table td {
             padding: 1rem;
             text-align: left;
-            border-bottom: 1px solid rgba(210, 105, 30, 0.1);
+            border-bottom: 1px solid rgba(255, 215, 0, 0.1);
         }
 
         .table th {
             background: var(--gradient-primary);
-            color: white;
+            color: var(--black);
             font-weight: 600;
         }
 
         .table tr:hover {
-            background: rgba(210, 105, 30, 0.05);
+            background: rgba(255, 215, 0, 0.05);
         }
 
         .category-select {
             padding: 0.5rem;
             border-radius: var(--border-radius);
-            border: 1px solid rgba(210, 105, 30, 0.3);
-            background: var(--card-bg);
+            border: 1px solid var(--dark-gold);
+            background: var(--dark-black);
             color: var(--text-light);
         }
 
@@ -386,15 +410,16 @@
         .form-group select {
             padding: 0.75rem;
             border-radius: var(--border-radius);
-            border: 1px solid rgba(210, 105, 30, 0.3);
-            background: var(--card-bg);
+            border: 1px solid var(--dark-gold);
+            background: var(--dark-black);
             color: var(--text-light);
         }
 
         .form-group input:focus,
         .form-group select:focus {
             outline: none;
-            border-color: var(--primary-orange);
+            border-color: var(--primary-gold);
+            box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.2);
         }
 
         .chart-container {
@@ -409,24 +434,143 @@
 
         @media (max-width: 768px) {
             .dashboard-container {
-                padding: 90px 1rem 2rem;
+                padding: 20px 0.5rem 2rem;
+                max-width: 100vw;
+                overflow-x: hidden;
+            }
+            
+            .dashboard-header {
+                padding: 1rem;
+                margin: 0 0.5rem 1rem;
+            }
+            
+            .dashboard-title {
+                font-size: 1.8rem;
+                line-height: 1.2;
+                word-wrap: break-word;
+            }
+            
+            .dashboard-subtitle {
+                font-size: 1rem;
+                line-height: 1.4;
             }
             
             .tab-navigation {
                 flex-wrap: wrap;
+                margin: 0 0.5rem 1rem;
+                padding: 0.25rem;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
             }
             
             .tab-button {
-                flex: none;
-                min-width: 120px;
+                flex: 0 0 auto;
+                min-width: 100px;
+                padding: 0.5rem 0.75rem;
+                font-size: 0.85rem;
+                white-space: nowrap;
             }
             
             .cards-grid {
                 grid-template-columns: 1fr;
+                gap: 1rem;
+                margin: 0 0.5rem 1rem;
+            }
+            
+            .card {
+                padding: 1rem;
+                margin: 0;
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+            }
+            
+            .card-title {
+                font-size: 1.1rem;
+                line-height: 1.3;
             }
             
             .budget-form {
                 grid-template-columns: 1fr;
+                gap: 0.75rem;
+            }
+            
+            .form-group input,
+            .form-group select {
+                width: 100%;
+                box-sizing: border-box;
+            }
+            
+            .btn {
+                width: 100%;
+                padding: 0.75rem;
+                font-size: 0.9rem;
+            }
+            
+            .account-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+                padding: 0.75rem;
+            }
+            
+            .account-actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            .account-balance {
+                font-size: 1.2rem;
+            }
+            
+            .table-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            .table {
+                min-width: 600px;
+            }
+            
+            .table th,
+            .table td {
+                padding: 0.5rem;
+                font-size: 0.85rem;
+            }
+            
+            .metric-value {
+                font-size: 2rem;
+            }
+            
+            .upload-area {
+                padding: 1rem;
+            }
+            
+            .upload-icon {
+                font-size: 2rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .dashboard-title {
+                font-size: 1.5rem;
+            }
+            
+            .metric-value {
+                font-size: 1.8rem;
+            }
+            
+            .tab-button {
+                min-width: 80px;
+                padding: 0.4rem 0.6rem;
+                font-size: 0.8rem;
+            }
+            
+            .card {
+                padding: 0.75rem;
+            }
+            
+            .account-type-header {
+                padding: 0.5rem 0.75rem;
             }
         }
     </style>
