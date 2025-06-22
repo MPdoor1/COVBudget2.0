@@ -483,6 +483,73 @@ app.get('/api/debug-users', async (req, res) => {
   }
 });
 
+// Debug account creation step by step
+app.post('/api/debug-account', async (req, res) => {
+  try {
+    const { name, type, bank_name, balance, user_id } = req.body;
+    
+    // Step 1: Test basic connection
+    const testResult = await query('SELECT NOW() as time, $1 as test_param', ['test']);
+    
+    // Step 2: Check if user exists
+    const userCheck = await query('SELECT id, email FROM users WHERE id = $1', [user_id]);
+    
+    // Step 3: Check accounts table structure
+    const tableStructure = await query(`
+      SELECT column_name, data_type, is_nullable 
+      FROM information_schema.columns 
+      WHERE table_name = 'accounts' 
+      ORDER BY ordinal_position
+    `);
+    
+    // Step 4: Try the actual insert
+    let insertResult = null;
+    let insertError = null;
+    try {
+      insertResult = await query(`
+        INSERT INTO accounts (user_id, name, account_name, type, account_type, bank_name, balance, is_active)
+        VALUES ($1, $2, $2, $3, $3, $4, $5, true)
+        RETURNING *
+      `, [user_id, name, type, bank_name, balance || 0]);
+    } catch (err) {
+      insertError = {
+        message: err.message,
+        code: err.code,
+        constraint: err.constraint,
+        table: err.table,
+        column: err.column,
+        detail: err.detail
+      };
+    }
+    
+    res.json({
+      success: !insertError,
+      steps: {
+        connection: testResult.rows[0],
+        userExists: userCheck.rows.length > 0,
+        user: userCheck.rows[0],
+        tableStructure: tableStructure.rows,
+        insertResult: insertResult ? insertResult.rows[0] : null,
+        insertError: insertError
+      }
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error.message,
+        code: error.code,
+        constraint: error.constraint,
+        table: error.table,
+        column: error.column,
+        detail: error.detail,
+        stack: error.stack
+      }
+    });
+  }
+});
+
 // === PLAID/BANKING ENDPOINTS ===
 
 // Create Plaid Link Token
