@@ -1330,96 +1330,49 @@ function parseWellsFargoRow(row, rowIndex) {
   console.log('Row values:', values);
   
   try {
-    // Wells Fargo format can vary, but typically:
-    // Column A: Date
-    // Column B: Amount  
-    // Column E: Description
-    // However, the CSV might not have headers, so we need to be flexible
-    
     let date = null;
     let amount = null;
     let description = null;
     
-    // Try to find date - look for date pattern in any column
-    for (let i = 0; i < values.length; i++) {
-      if (values[i] && typeof values[i] === 'string' && values[i].match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/)) {
-        try {
-          date = parseDate(values[i]);
-          console.log(`Found date in column ${i}:`, values[i]);
-          break;
-        } catch (error) {
-          continue;
-        }
+    // Wells Fargo format: A=Date, B=Amount, C=*, D=Empty, E/F/G=Description parts
+    // For a 7-column CSV: columns 0,1,2,3,4,5,6 = A,B,C,D,E,F,G
+    
+    // Get date from column A (index 0)
+    if (values[0] && String(values[0]).match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/)) {
+      try {
+        date = parseDate(values[0]);
+        console.log(`Found date in column A (0):`, values[0]);
+      } catch (error) {
+        console.log(`Failed to parse date from column A:`, error.message);
       }
     }
     
-    // Try to find amount - look for numeric values that could be amounts
-    for (let i = 0; i < values.length; i++) {
-      if (values[i] !== null && values[i] !== undefined && values[i] !== '') {
-        const cleanAmount = String(values[i]).replace(/[,$\s]/g, '');
-        const testAmount = parseFloat(cleanAmount);
-        if (!isNaN(testAmount) && testAmount !== 0 && Math.abs(testAmount) > 0.01) {
-          // Make sure this isn't a date that looks like a number
-          if (!String(values[i]).match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/)) {
-            amount = testAmount;
-            console.log(`Found amount in column ${i}:`, values[i], '-> parsed as:', amount);
-            break;
-          }
-        }
+    // Get amount from column B (index 1)
+    if (values[1] !== null && values[1] !== undefined && values[1] !== '') {
+      const cleanAmount = String(values[1]).replace(/[,$\s]/g, '');
+      const testAmount = parseFloat(cleanAmount);
+      if (!isNaN(testAmount) && testAmount !== 0) {
+        amount = testAmount;
+        console.log(`Found amount in column B (1):`, values[1], '-> parsed as:', amount);
       }
     }
     
-    // Wells Fargo specific format: A=Date, B=Amount, C=*, D=Empty, E=Description Part 1, F=Description Part 2, G=Description Part 3
-    // Concatenate description from columns E, F, G (indices 4, 5, 6)
+    // Get description from columns E, F, G (indices 4, 5, 6)
     let descriptionParts = [];
     
-    // Check columns starting from E (index 4) onwards for description parts
+    // Check each column from E onwards
     for (let i = 4; i < values.length; i++) {
-      if (values[i] && String(values[i]).trim() && String(values[i]).trim() !== '*') {
+      const colLetter = String.fromCharCode(69 + (i - 4)); // E, F, G, H, etc.
+      if (values[i] && String(values[i]).trim() && String(values[i]).trim() !== '*' && String(values[i]).trim() !== '') {
         const part = String(values[i]).trim();
-        // Skip if this looks like a date
-        if (part.match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/)) {
-          continue;
-        }
-        // Skip if this looks like a pure number (amount)
-        const cleanValue = part.replace(/[,$\s]/g, '');
-        if (!isNaN(parseFloat(cleanValue)) && cleanValue === parseFloat(cleanValue).toString()) {
-          continue;
-        }
         descriptionParts.push(part);
+        console.log(`Found description part in column ${colLetter} (${i}):`, part);
       }
     }
     
     if (descriptionParts.length > 0) {
       description = descriptionParts.join(' ').trim();
-      console.log(`Found description parts in columns E,F,G:`, descriptionParts, '-> combined:', description);
-    } else {
-      // Fallback: look for the longest meaningful text field
-      let longestText = '';
-      for (let i = 0; i < values.length; i++) {
-        if (values[i] && typeof values[i] === 'string' && values[i].length > longestText.length) {
-          const text = String(values[i]).trim();
-          // Skip if this looks like a date
-          if (text.match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/)) {
-            continue;
-          }
-          // Skip if this looks like a pure number (amount)
-          const cleanValue = text.replace(/[,$\s]/g, '');
-          if (!isNaN(parseFloat(cleanValue)) && cleanValue === parseFloat(cleanValue).toString()) {
-            continue;
-          }
-          // Skip if it's just "*" or empty
-          if (text === '*' || text === '') {
-            continue;
-          }
-          longestText = text;
-        }
-      }
-      description = longestText;
-      
-      if (description) {
-        console.log(`Found description in longest text field:`, description);
-      }
+      console.log(`Combined description from ${descriptionParts.length} parts:`, description);
     }
     
     console.log(`Wells Fargo parsed: date=${date}, amount=${amount}, description=${description}`);
