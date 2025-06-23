@@ -1483,14 +1483,10 @@ function parseWellsFargoRow(row, rowIndex) {
     let amount = null;
     let description = '';
     
-    // Wells Fargo CSV format typically has:
-    // Column A (0): Date
-    // Column B (1): Amount 
-    // Column C (2): * (status indicator)
-    // Column D (3): Empty or check number
-    // Column E+ (4+): Description parts
+    // Wells Fargo CSV format: Date, Amount, *, , Description
+    // Expected structure: [Date, Amount, *, Empty, Description]
     
-    // Extract date from column A (index 0)
+    // Extract date from first column (index 0)
     if (values.length > 0 && values[0]) {
       const dateStr = values[0];
       console.log(`Found date in column A (0): ${dateStr}`);
@@ -1502,7 +1498,7 @@ function parseWellsFargoRow(row, rowIndex) {
       }
     }
     
-    // Extract amount from column B (index 1)
+    // Extract amount from second column (index 1)
     if (values.length > 1 && values[1]) {
       const amountStr = String(values[1]).replace(/[,$\s]/g, '');
       amount = parseFloat(amountStr);
@@ -1514,59 +1510,53 @@ function parseWellsFargoRow(row, rowIndex) {
       }
     }
     
-    // Extract description from columns E onwards (index 4+)
-    // Skip columns C (index 2) and D (index 3) as they are typically * and empty
-    const descriptionParts = [];
-    
-    if (values.length >= 5) {
-      // Look for description starting from column E (index 4)
-      for (let i = 4; i < values.length; i++) {
-        const colLetter = String.fromCharCode(69 + (i - 4)); // E, F, G, H, etc.
-        if (values[i] && String(values[i]).trim() && String(values[i]).trim() !== '*' && String(values[i]).trim() !== '') {
-          const part = String(values[i]).trim();
-          
-          // Skip if part is purely numeric (likely misplaced amount)
-          const numericCheck = part.replace(/[,$-]/g, '').match(/^\d+(\.\d+)?$/);
-          if (numericCheck) {
-            console.log(`Skipping numeric part in column ${colLetter}:`, part);
-            continue;
-          }
-          
-          // Skip very short parts that are likely not meaningful descriptions
-          if (part.length < 3) {
-            console.log(`Skipping short part in column ${colLetter}:`, part);
-            continue;
-          }
-          
-          descriptionParts.push(part);
-          console.log(`Found description part in column ${colLetter} (${i}):`, part);
-        }
+    // Extract description from the last column that contains meaningful text
+    // In Wells Fargo format, description is typically in the 5th column (index 4)
+    if (values.length >= 5 && values[4]) {
+      const desc = String(values[4]).trim();
+      if (desc && desc !== '*' && desc !== '') {
+        description = desc;
+        console.log(`Found description in column E (4): ${description}`);
       }
     }
     
-    // If we found description parts, combine them
-    if (descriptionParts.length > 0) {
-      description = descriptionParts.join(' ').trim();
-      console.log(`Combined description from ${descriptionParts.length} parts:`, description);
-    } else {
-      // Fallback: look for the longest non-numeric text field
+    // If no description found in column 4, look for the longest meaningful text field
+    if (!description) {
       let longestText = '';
+      let longestIndex = -1;
+      
       values.forEach((val, idx) => {
-        if (val && typeof val === 'string' && val.length > longestText.length) {
+        if (val && typeof val === 'string') {
           const cleanVal = val.trim();
-          // Skip if it's purely numeric, a date, or very short
-          const isNumeric = cleanVal.replace(/[,$-]/g, '').match(/^\d+(\.\d+)?$/);
-          const isDate = cleanVal.match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/);
           
-          if (!isNumeric && !isDate && cleanVal.length > 5 && cleanVal !== '*') {
+          // Skip if it's the date, amount, asterisk, or empty
+          if (idx === 0 || idx === 1 || cleanVal === '*' || cleanVal === '') {
+            return;
+          }
+          
+          // Skip if it's purely numeric (likely misplaced amount)
+          const isNumeric = cleanVal.replace(/[,$-]/g, '').match(/^\d+(\.\d+)?$/);
+          if (isNumeric) {
+            return;
+          }
+          
+          // Skip if it's a date
+          const isDate = cleanVal.match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/);
+          if (isDate) {
+            return;
+          }
+          
+          // Keep the longest meaningful text
+          if (cleanVal.length > longestText.length && cleanVal.length > 5) {
             longestText = cleanVal;
+            longestIndex = idx;
             description = cleanVal;
           }
         }
       });
       
       if (description) {
-        console.log(`Using fallback description (longest text):`, description);
+        console.log(`Found description in column ${longestIndex} (fallback): ${description}`);
       }
     }
     
