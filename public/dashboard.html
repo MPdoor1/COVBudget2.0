@@ -1111,14 +1111,25 @@
             const file = selectedFiles[bankId];
             const accountId = document.getElementById(`uploadAccountSelect-${bankId}`).value;
             
-            if (!file || !accountId) {
-                showMessage('Please select both a file and an account', 'error');
+            if (!file) {
+                showMessage('Please select a file to upload', 'error');
                 return;
             }
             
             const formData = new FormData();
             formData.append('statement', file);
-            formData.append('account_id', accountId);
+            
+            // If an account is selected, use it; otherwise let the server create a new one
+            if (accountId) {
+                formData.append('account_id', accountId);
+            } else {
+                // Use the bank name as the default account name
+                const bankName = Object.keys(getBankGroups()).find(name => 
+                    name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') === bankId
+                );
+                formData.append('account_name', `${bankName} Checking`);
+            }
+            
             formData.append('format', 'wells_fargo'); // Specify Wells Fargo format
             
             try {
@@ -1135,6 +1146,9 @@
                     </div>
                 `;
                 
+                console.log('Uploading file:', file.name);
+                console.log('Account ID:', accountId);
+                
                 const response = await fetch('/api/upload-statement', {
                     method: 'POST',
                     headers: {
@@ -1143,25 +1157,48 @@
                     body: formData
                 });
                 
-                if (response.ok) {
-                    const result = await response.json();
+                const result = await response.json();
+                console.log('Upload response:', result);
+                
+                if (response.ok && result.success) {
                     showMessage(`Statement uploaded successfully! ${result.transactions_count} transactions processed.`, 'success');
-                    
-                    // Hide preview and reset
-                    cancelFileUpload(bankId);
-                    loadDashboardData();
                     
                     // Show success status
                     document.getElementById(`uploadStatus-${bankId}`).innerHTML = `
                         <div style="color: var(--success-gold); padding: 1rem; background: rgba(255, 215, 0, 0.1); border-radius: 8px; border: 1px solid var(--dark-gold);">
                             <i class="fas fa-check-circle"></i> Successfully processed ${result.transactions_count} transactions from ${file.name}
+                            <br><small>Account: ${result.accountName} | Date Range: ${result.dateRange}</small>
                         </div>
                     `;
+                    
+                    // Hide preview and reset
+                    cancelFileUpload(bankId);
+                    
+                    // Refresh dashboard data
+                    console.log('Refreshing dashboard data...');
+                    await loadDashboardData();
+                    
+                    // Switch to the bank tab or transactions tab to show results
+                    if (result.accountId) {
+                        // Try to switch to the bank tab first
+                        const bankName = result.accountName ? result.accountName.split(' ')[0] : 'Wells Fargo';
+                        const bankTabId = bankName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                        
+                        setTimeout(() => {
+                            if (document.getElementById(`bank-${bankTabId}`)) {
+                                switchTab(`bank-${bankTabId}`);
+                            } else {
+                                switchTab('transactions');
+                            }
+                        }, 1000);
+                    }
+                    
                 } else {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Upload failed');
+                    const errorMessage = result.error || 'Upload failed';
+                    throw new Error(errorMessage);
                 }
             } catch (error) {
+                console.error('Upload error:', error);
                 showMessage('Upload error: ' + error.message, 'error');
                 document.getElementById(`uploadStatus-${bankId}`).innerHTML = `
                     <div style="color: var(--error-red); padding: 1rem; background: rgba(255, 68, 68, 0.1); border-radius: 8px; border: 1px solid var(--error-red);">

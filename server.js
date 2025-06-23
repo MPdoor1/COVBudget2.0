@@ -167,29 +167,40 @@ const query = async (text, params) => {
 const mockQuery = async (text, params) => {
   console.log('Mock query:', text.substring(0, 100) + '...', 'Params:', params?.slice(0, 3));
   
-  // Handle INSERT INTO accounts
-  if (text.includes('INSERT INTO accounts')) {
-    const [userId, name, type, bankName, balance] = params;
+  // Handle INSERT INTO accounts with RETURNING
+  if (text.includes('INSERT INTO accounts') && text.includes('RETURNING')) {
+    const [userId, name, type, bankName, balance, isActive] = params;
     const newAccount = {
-      id: 'mock-account-' + Date.now(),
+      id: 'mock-account-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
       user_id: userId,
       name,
       type,
       bank_name: bankName,
       balance: balance || 0,
-      is_active: true,
+      is_active: isActive !== false,
       created_at: new Date(),
       updated_at: new Date()
     };
     mockAccounts.push(newAccount);
     console.log('Created mock account:', newAccount);
     console.log('Total mock accounts:', mockAccounts.length);
-    return { rows: [newAccount] };
+    return { rows: [{ id: newAccount.id, name: newAccount.name }] };
   }
   
-  // Handle INSERT INTO transactions
-  if (text.includes('INSERT INTO transactions')) {
+  // Handle INSERT INTO transactions with RETURNING
+  if (text.includes('INSERT INTO transactions') && text.includes('RETURNING')) {
     const [userId, accountId, transactionId, amount, date, description, categoryPrimary, category, merchantName, currencyCode] = params;
+    
+    // Check for duplicate transaction_id
+    const existingTransaction = mockTransactions.find(tx => 
+      tx.account_id === accountId && tx.transaction_id === transactionId
+    );
+    
+    if (existingTransaction) {
+      console.log('Duplicate transaction skipped:', transactionId);
+      return { rows: [] }; // ON CONFLICT DO NOTHING
+    }
+    
     const newTransaction = {
       id: 'mock-tx-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
       user_id: userId,
@@ -206,9 +217,13 @@ const mockQuery = async (text, params) => {
       updated_at: new Date()
     };
     mockTransactions.push(newTransaction);
-    console.log('Created mock transaction:', { id: newTransaction.id, amount: newTransaction.amount, description: newTransaction.description?.substring(0, 50) });
+    console.log('Created mock transaction:', { 
+      id: newTransaction.id, 
+      amount: newTransaction.amount, 
+      description: newTransaction.description?.substring(0, 50) 
+    });
     console.log('Total mock transactions:', mockTransactions.length);
-    return { rows: [newTransaction] };
+    return { rows: [{ id: newTransaction.id }] };
   }
   
   // Handle SELECT from accounts
@@ -216,9 +231,19 @@ const mockQuery = async (text, params) => {
     const userId = params[0];
     console.log('Querying accounts for user:', userId);
     console.log('Available accounts:', mockAccounts.map(acc => ({ id: acc.id, user_id: acc.user_id, name: acc.name })));
-    const userAccounts = mockAccounts.filter(acc => acc.user_id === userId && acc.is_active);
-    console.log('Filtered accounts:', userAccounts.length);
-    return { rows: userAccounts };
+    
+    if (text.includes('WHERE id = $1 AND user_id = $2')) {
+      // Account verification query
+      const [accountId, userId] = params;
+      const account = mockAccounts.find(acc => acc.id === accountId && acc.user_id === userId);
+      console.log('Account verification result:', !!account);
+      return { rows: account ? [{ id: account.id, name: account.name }] : [] };
+    } else {
+      // General account list query
+      const userAccounts = mockAccounts.filter(acc => acc.user_id === userId && acc.is_active);
+      console.log('Filtered accounts:', userAccounts.length);
+      return { rows: userAccounts };
+    }
   }
   
   // Handle SELECT from transactions
@@ -226,7 +251,19 @@ const mockQuery = async (text, params) => {
     const userId = params[0];
     console.log('Querying transactions for user:', userId);
     console.log('Available transactions:', mockTransactions.map(tx => ({ id: tx.id, user_id: tx.user_id, amount: tx.amount })));
-    const userTransactions = mockTransactions.filter(tx => tx.user_id === userId);
+    
+    // Add account name to transactions for display
+    const userTransactions = mockTransactions
+      .filter(tx => tx.user_id === userId)
+      .map(tx => {
+        const account = mockAccounts.find(acc => acc.id === tx.account_id);
+        return {
+          ...tx,
+          account_name: account ? account.name : 'Unknown Account',
+          institution_name: account ? account.bank_name : 'Unknown Bank'
+        };
+      });
+    
     console.log('Filtered transactions:', userTransactions.length);
     return { rows: userTransactions };
   }
@@ -252,14 +289,8 @@ const mockQuery = async (text, params) => {
     return { rows: [newCategory] };
   }
   
-  // Handle account verification queries
-  if (text.includes('SELECT id FROM accounts WHERE id =') && text.includes('AND user_id =')) {
-    const [accountId, userId] = params;
-    const account = mockAccounts.find(acc => acc.id === accountId && acc.user_id === userId);
-    return { rows: account ? [account] : [] };
-  }
-  
   // Default response for other queries
+  console.log('Unhandled query type');
   return { rows: [] };
 };
 
@@ -1126,192 +1157,216 @@ const upload = multer({
 // Bank statement upload endpoint (requires authentication)
 app.post('/api/upload-statement', authenticateToken, upload.single('statement'), async (req, res) => {
   try {
+    console.log('=== STATEMENT UPLOAD START ===');
+    console.log('User:', req.user);
+    console.log('File:', req.file ? req.file.originalname : 'No file');
+    console.log('Body:', req.body);
+
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const { account_id, format = 'wells_fargo' } = req.body;
-    const accountName = req.body.account_name || 'Uploaded Account';
+    const { account_id, account_name, format = 'wells_fargo' } = req.body;
     const filePath = req.file.path;
     const fileExt = path.extname(req.file.originalname).toLowerCase();
 
     console.log('Processing statement upload:', req.file.originalname);
+    console.log('Format:', format);
+    console.log('Account ID:', account_id);
+    console.log('Account Name:', account_name);
 
     let transactions = [];
 
     try {
       if (fileExt === '.csv') {
-        // Parse CSV file with format specification
         transactions = await parseCSVFile(filePath, format);
       } else if (fileExt === '.xlsx' || fileExt === '.xls') {
-        // Parse Excel file with format specification
         transactions = await parseExcelFile(filePath, format);
+      } else {
+        throw new Error('Unsupported file format. Please upload CSV or Excel files.');
       }
+
+      console.log(`Parsed ${transactions.length} transactions from file`);
 
       if (transactions.length === 0) {
         throw new Error('No valid transactions found in file');
       }
 
-      // Handle database operations
-      let insertedCount = 0;
-      let accountId = account_id;
+      // Determine account to use
+      let targetAccountId = account_id;
+      let targetAccountName = account_name || 'Uploaded Account';
 
-      if (dbClient) {
-        console.log('Processing with database client...');
+      // If no account_id provided, create a new account
+      if (!targetAccountId) {
+        console.log('Creating new account for upload...');
         
-        // Ensure we have a valid account_id
-        if (!account_id) {
-          console.log('Creating new account for upload...');
-          try {
-            const accountResult = await query(`
-              INSERT INTO accounts (user_id, name, type, bank_name, balance, is_active, created_at, updated_at)
-              VALUES ($1, $2, 'checking', 'Uploaded Bank', 0, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              RETURNING id
-            `, [req.user.userId, accountName]);
-            
-            if (accountResult.rows.length > 0) {
-              accountId = accountResult.rows[0].id;
-              console.log('Created new account with ID:', accountId);
-            } else {
-              throw new Error('Failed to create account - no ID returned');
-            }
-          } catch (accountError) {
-            console.error('Account creation failed:', accountError);
-            throw new Error(`Failed to create account: ${accountError.message}`);
-          }
+        const accountResult = await query(`
+          INSERT INTO accounts (
+            user_id, name, type, bank_name, balance, is_active, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          RETURNING id, name
+        `, [
+          req.user.userId,
+          targetAccountName,
+          'checking',
+          'Wells Fargo', // Default bank name
+          0,
+          true
+        ]);
+
+        if (accountResult.rows.length > 0) {
+          targetAccountId = accountResult.rows[0].id;
+          targetAccountName = accountResult.rows[0].name;
+          console.log('Created account:', targetAccountId, targetAccountName);
         } else {
-          // Verify the account exists and belongs to the user
-          try {
-            const accountCheck = await query(`
-              SELECT id FROM accounts WHERE id = $1 AND user_id = $2
-            `, [account_id, req.user.userId]);
-            
-            if (accountCheck.rows.length === 0) {
-              throw new Error('Account not found or access denied');
-            }
-            console.log('Using existing account ID:', account_id);
-          } catch (checkError) {
-            console.error('Account verification failed:', checkError);
-            throw new Error(`Account verification failed: ${checkError.message}`);
-          }
+          throw new Error('Failed to create account for transactions');
         }
-
-        // Insert transactions with proper error handling
-        console.log(`Inserting ${transactions.length} transactions...`);
-        for (let i = 0; i < transactions.length; i++) {
-          const transaction = transactions[i];
-          try {
-            // Validate transaction data before insertion
-            if (!transaction.date || !transaction.description || transaction.amount === undefined || transaction.amount === null) {
-              console.warn(`Skipping invalid transaction ${i + 1}:`, transaction);
-              continue;
-            }
-
-            // Ensure date is in proper format
-            let formattedDate;
-            if (typeof transaction.date === 'string') {
-              formattedDate = transaction.date;
-            } else if (transaction.date instanceof Date) {
-              formattedDate = transaction.date.toISOString().split('T')[0];
-            } else {
-              console.warn(`Invalid date format for transaction ${i + 1}:`, transaction.date);
-              continue;
-            }
-
-            // Generate unique transaction ID
-            const transactionId = `upload_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}`;
-
-            const insertResult = await query(`
-              INSERT INTO transactions (
-                user_id, account_id, transaction_id, amount, date, description, 
-                category_primary, category, merchant_name, 
-                iso_currency_code, created_at, updated_at
-              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              ON CONFLICT (transaction_id) DO NOTHING
-              RETURNING id
-            `, [
-              req.user.userId,
-              accountId,
-              transactionId,
-              parseFloat(transaction.amount),
-              formattedDate,
-              transaction.description.substring(0, 500), // Ensure it fits in VARCHAR(500)
-              transaction.category || 'Other',
-              transaction.category || 'Other',
-              transaction.merchant ? transaction.merchant.substring(0, 255) : null,
-              'USD'
-            ]);
-            
-            if (insertResult.rows.length > 0) {
-              insertedCount++;
-              console.log(`✓ Inserted transaction ${i + 1}/${transactions.length}: ${transaction.description.substring(0, 50)}...`);
-            } else {
-              console.log(`- Skipped duplicate transaction ${i + 1}: ${transaction.description.substring(0, 50)}...`);
-            }
-            
-          } catch (txError) {
-            console.error(`Failed to insert transaction ${i + 1}:`, {
-              transaction: {
-                date: transaction.date,
-                amount: transaction.amount,
-                description: transaction.description?.substring(0, 100)
-              },
-              error: {
-                message: txError.message,
-                detail: txError.detail,
-                code: txError.code,
-                constraint: txError.constraint
-              }
-            });
-            // Continue with next transaction instead of failing completely
-          }
-        }
-        
-        console.log(`Transaction insertion complete. Inserted: ${insertedCount}/${transactions.length}`);
-        
       } else {
-        // Development mode - simulate processing
-        console.log('Development mode: simulating transaction processing');
-        insertedCount = transactions.length;
-        accountId = account_id || 'dev-account-id';
+        // Verify account exists and belongs to user
+        const accountCheck = await query(
+          'SELECT id, name FROM accounts WHERE id = $1 AND user_id = $2',
+          [targetAccountId, req.user.userId]
+        );
+        
+        if (accountCheck.rows.length === 0) {
+          throw new Error('Account not found or access denied');
+        }
+        
+        targetAccountName = accountCheck.rows[0].name;
       }
 
-      // Get date range for summary
-      const dates = transactions.map(t => t.date).filter(d => d).sort();
-      const dateRange = dates.length > 0 ? 
-        `${dates[0]} to ${dates[dates.length - 1]}` : 'Unknown';
+      console.log('Using account:', targetAccountId, targetAccountName);
 
-      res.json({
-        success: true,
-        transactions_count: insertedCount,
-        transactionCount: insertedCount,
-        totalParsed: transactions.length,
-        accountId: accountId,
-        accountName: accountName,
-        dateRange: dateRange,
-        message: `Successfully processed ${insertedCount} of ${transactions.length} transactions`
-      });
+      // Insert transactions
+      let insertedCount = 0;
+      const insertErrors = [];
 
-    } catch (parseError) {
-      console.error('File parsing error:', parseError);
-      res.status(400).json({ 
-        error: `Failed to parse file: ${parseError.message}`,
-        details: parseError.stack
-      });
-    } finally {
+      for (let i = 0; i < transactions.length; i++) {
+        const transaction = transactions[i];
+        
+        try {
+          // Create unique transaction ID
+          const transactionId = `upload_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}`;
+          
+          // Validate transaction data
+          if (!transaction.date || !transaction.description || transaction.amount === undefined || transaction.amount === null) {
+            console.log('Skipping invalid transaction:', transaction);
+            continue;
+          }
+
+          // Ensure description is not too long for database
+          const description = String(transaction.description).substring(0, 500);
+          const category = String(transaction.category || 'Other').substring(0, 100);
+          const merchant = String(transaction.merchant || '').substring(0, 100);
+
+          console.log(`Inserting transaction ${i + 1}:`, {
+            id: transactionId,
+            amount: transaction.amount,
+            date: transaction.date,
+            description: description.substring(0, 50) + '...'
+          });
+
+          const result = await query(`
+            INSERT INTO transactions (
+              user_id, account_id, transaction_id, amount, date, description, 
+              category_primary, category, merchant_name, 
+              iso_currency_code, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT (account_id, transaction_id) DO NOTHING
+            RETURNING id
+          `, [
+            req.user.userId,
+            targetAccountId,
+            transactionId,
+            transaction.amount,
+            transaction.date,
+            description,
+            category,
+            category,
+            merchant,
+            'USD'
+          ]);
+
+          if (result.rows.length > 0) {
+            insertedCount++;
+            console.log(`✓ Transaction ${i + 1} inserted successfully`);
+          } else {
+            console.log(`⚠ Transaction ${i + 1} skipped (duplicate)`);
+          }
+
+        } catch (insertError) {
+          console.error(`✗ Failed to insert transaction ${i + 1}:`, insertError.message);
+          console.error('Transaction data:', transaction);
+          console.error('Full error:', insertError);
+          insertErrors.push(`Transaction ${i + 1}: ${insertError.message}`);
+        }
+      }
+
+      // Calculate date range
+      const dates = transactions.map(t => new Date(t.date)).sort((a, b) => a - b);
+      const dateRange = dates.length > 0 
+        ? `${dates[0].toISOString().split('T')[0]} to ${dates[dates.length - 1].toISOString().split('T')[0]}`
+        : 'Unknown';
+
+      console.log(`=== UPLOAD COMPLETE ===`);
+      console.log(`Total parsed: ${transactions.length}`);
+      console.log(`Successfully inserted: ${insertedCount}`);
+      console.log(`Errors: ${insertErrors.length}`);
+
       // Clean up uploaded file
       try {
         fs.unlinkSync(filePath);
       } catch (cleanupError) {
-        console.warn('Failed to cleanup uploaded file:', cleanupError.message);
+        console.log('File cleanup warning:', cleanupError.message);
       }
+
+      // Return success response
+      const response = {
+        success: true,
+        transactions_count: insertedCount,
+        transactionCount: insertedCount, // For backward compatibility
+        totalParsed: transactions.length,
+        accountId: targetAccountId,
+        accountName: targetAccountName,
+        dateRange: dateRange,
+        message: `Successfully processed ${insertedCount} transactions`,
+        errors: insertErrors.length > 0 ? insertErrors : undefined
+      };
+
+      console.log('Response:', response);
+      res.json(response);
+
+    } catch (parseError) {
+      console.error('File parsing error:', parseError);
+      
+      // Clean up uploaded file
+      try {
+        fs.unlinkSync(filePath);
+      } catch (cleanupError) {
+        console.log('File cleanup warning:', cleanupError.message);
+      }
+
+      res.status(400).json({
+        error: 'Failed to parse file: ' + parseError.message,
+        details: parseError.stack
+      });
     }
 
   } catch (error) {
-    console.error('Statement upload error:', error);
-    res.status(500).json({ 
-      error: 'Failed to process statement upload',
-      details: error.message
+    console.error('Upload endpoint error:', error);
+    
+    // Clean up uploaded file if it exists
+    if (req.file && req.file.path) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (cleanupError) {
+        console.log('File cleanup warning:', cleanupError.message);
+      }
+    }
+
+    res.status(500).json({
+      error: 'Upload failed: ' + error.message,
+      details: error.stack
     });
   }
 });
