@@ -1374,25 +1374,24 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
 // Helper function to parse CSV files
 function parseCSVFile(filePath, format = null) {
   return new Promise((resolve, reject) => {
-    const transactions = [];
+    const rows = [];
     let rowCount = 0;
     let hasHeaders = false;
     
-    console.log(`Parsing CSV file with format: ${format || 'auto-detect'}`);
+    console.log(`🧠 Using intelligent universal CSV parser (format hint: ${format || 'auto-detect'})`);
     
     fs.createReadStream(filePath)
       .pipe(csv())
       .on('data', (row) => {
         try {
           rowCount++;
-          console.log(`Processing row ${rowCount}:`, row);
           
           // Check if this looks like a header row
           if (rowCount === 1) {
             const values = Object.values(row);
             const hasDateValue = values.some(val => val && val.toString().match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/));
             hasHeaders = !hasDateValue;
-            console.log('Has headers:', hasHeaders, 'Values:', values);
+            console.log('Header detection:', hasHeaders ? 'Headers detected' : 'No headers, data starts immediately');
           }
           
           // Skip header row if detected
@@ -1401,26 +1400,25 @@ function parseCSVFile(filePath, format = null) {
             return;
           }
           
-          let transaction;
-          if (format === 'wells_fargo') {
-            transaction = parseWellsFargoRow(row, rowCount);
-          } else {
-            transaction = parseTransactionRow(row);
-          }
+          // Collect all data rows for intelligent analysis
+          rows.push(row);
           
-          if (transaction) {
-            transactions.push(transaction);
-            console.log('Successfully parsed transaction:', transaction);
-          } else {
-            console.log('Failed to parse row into transaction');
-          }
         } catch (error) {
-          console.warn('Failed to parse row:', error.message);
+          console.warn('Failed to process row:', error.message);
         }
       })
       .on('end', () => {
-        console.log(`CSV parsing complete. Total rows: ${rowCount}, Transactions: ${transactions.length}`);
-        resolve(transactions);
+        console.log(`📊 Collected ${rows.length} data rows for analysis`);
+        
+        try {
+          // Use intelligent universal parser
+          const transactions = analyzeAndParseCSV(rows);
+          console.log(`✅ Universal parsing complete: ${transactions.length} transactions extracted`);
+          resolve(transactions);
+        } catch (parseError) {
+          console.error('❌ Intelligent parsing failed:', parseError);
+          reject(parseError);
+        }
       })
       .on('error', reject);
   });
@@ -1429,32 +1427,18 @@ function parseCSVFile(filePath, format = null) {
 // Helper function to parse Excel files
 function parseExcelFile(filePath, format = null) {
   try {
-    console.log(`Parsing Excel file with format: ${format || 'auto-detect'}`);
+    console.log(`🧠 Using intelligent universal Excel parser (format hint: ${format || 'auto-detect'})`);
     
     const workbook = xlsx.readFile(filePath);
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const jsonData = xlsx.utils.sheet_to_json(worksheet);
     
-    const transactions = [];
-    let rowIndex = 0;
-    for (const row of jsonData) {
-      try {
-        rowIndex++;
-        let transaction;
-        if (format === 'wells_fargo') {
-          transaction = parseWellsFargoRow(row, rowIndex);
-        } else {
-          transaction = parseTransactionRow(row);
-        }
-        
-        if (transaction) {
-          transactions.push(transaction);
-        }
-      } catch (error) {
-        console.warn('Failed to parse row:', error.message);
-      }
-    }
+    console.log(`📊 Collected ${jsonData.length} rows from Excel file for analysis`);
+    
+    // Use intelligent universal parser
+    const transactions = analyzeAndParseCSV(jsonData);
+    console.log(`✅ Universal Excel parsing complete: ${transactions.length} transactions extracted`);
     
     return transactions;
   } catch (error) {
@@ -2221,3 +2205,389 @@ process.on('SIGTERM', async () => {
   }
   process.exit(0);
 });
+
+// Universal Intelligent CSV Parser
+function analyzeAndParseCSV(rows) {
+    console.log('🧠 Starting intelligent CSV analysis...');
+    
+    if (!rows || rows.length === 0) {
+        throw new Error('No data rows to analyze');
+    }
+    
+    // Sample the first few rows for analysis
+    const sampleSize = Math.min(10, rows.length);
+    const sampleRows = rows.slice(0, sampleSize);
+    
+    console.log(`Analyzing ${sampleSize} sample rows from ${rows.length} total rows`);
+    
+    // Get column structure from first row
+    const firstRow = sampleRows[0];
+    const columnKeys = Object.keys(firstRow);
+    const columnCount = columnKeys.length;
+    
+    console.log(`Found ${columnCount} columns:`, columnKeys);
+    
+    // Analyze each column to determine its type
+    const columnAnalysis = analyzeColumns(sampleRows, columnKeys);
+    
+    // Identify the key columns we need
+    const columnMapping = identifyKeyColumns(columnAnalysis);
+    
+    console.log('Column mapping identified:', columnMapping);
+    
+    // Parse all rows using the identified mapping
+    const transactions = [];
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (let i = 0; i < rows.length; i++) {
+        try {
+            const transaction = parseRowWithMapping(rows[i], columnMapping, i + 1);
+            if (transaction) {
+                transactions.push(transaction);
+                successCount++;
+            } else {
+                failCount++;
+            }
+        } catch (error) {
+            console.log(`❌ Failed to parse row ${i + 1}:`, error.message);
+            failCount++;
+        }
+    }
+    
+    console.log(`✅ Intelligent parsing complete: ${successCount} success, ${failCount} failed`);
+    return transactions;
+}
+
+function analyzeColumns(sampleRows, columnKeys) {
+    const analysis = {};
+    
+    columnKeys.forEach((key, index) => {
+        analysis[key] = {
+            index: index,
+            key: key,
+            samples: [],
+            types: {
+                date: 0,
+                amount: 0,
+                description: 0,
+                empty: 0,
+                other: 0
+            },
+            patterns: {
+                hasNumbers: 0,
+                hasLetters: 0,
+                hasSymbols: 0,
+                isNumeric: 0,
+                isDate: 0,
+                isEmpty: 0,
+                avgLength: 0
+            }
+        };
+        
+        // Collect samples and analyze patterns
+        let totalLength = 0;
+        sampleRows.forEach(row => {
+            const value = String(row[key] || '').trim();
+            analysis[key].samples.push(value);
+            
+            totalLength += value.length;
+            
+            // Pattern detection
+            if (!value || value === '') {
+                analysis[key].patterns.isEmpty++;
+                analysis[key].types.empty++;
+            } else {
+                if (/\d/.test(value)) analysis[key].patterns.hasNumbers++;
+                if (/[a-zA-Z]/.test(value)) analysis[key].patterns.hasLetters++;
+                if (/[^a-zA-Z0-9\s]/.test(value)) analysis[key].patterns.hasSymbols++;
+                
+                // Check if it's purely numeric (amount)
+                if (/^-?\$?\d+\.?\d*$/.test(value.replace(/,/g, ''))) {
+                    analysis[key].patterns.isNumeric++;
+                    analysis[key].types.amount++;
+                }
+                
+                // Check if it's a date
+                if (isLikelyDate(value)) {
+                    analysis[key].patterns.isDate++;
+                    analysis[key].types.date++;
+                }
+                
+                // Check if it's descriptive text
+                if (value.length > 10 && /[a-zA-Z]/.test(value)) {
+                    analysis[key].types.description++;
+                } else if (value.length > 0) {
+                    analysis[key].types.other++;
+                }
+            }
+        });
+        
+        analysis[key].patterns.avgLength = totalLength / sampleRows.length;
+    });
+    
+    return analysis;
+}
+
+function isLikelyDate(value) {
+    // Common date patterns
+    const datePatterns = [
+        /^\d{1,2}\/\d{1,2}\/\d{2,4}$/,     // MM/DD/YYYY or M/D/YY
+        /^\d{1,2}-\d{1,2}-\d{2,4}$/,      // MM-DD-YYYY
+        /^\d{4}-\d{1,2}-\d{1,2}$/,        // YYYY-MM-DD
+        /^\d{1,2}\/\d{1,2}\/\d{4}$/,      // MM/DD/YYYY
+        /^\d{2}\/\d{2}\/\d{4}$/,          // MM/DD/YYYY
+    ];
+    
+    return datePatterns.some(pattern => pattern.test(value));
+}
+
+function identifyKeyColumns(analysis) {
+    const mapping = {
+        date: null,
+        amount: null,
+        description: null
+    };
+    
+    const columns = Object.keys(analysis);
+    
+    // Find date column - highest date score
+    let bestDateScore = 0;
+    columns.forEach(key => {
+        const col = analysis[key];
+        const dateScore = col.types.date + (col.patterns.isDate * 2);
+        if (dateScore > bestDateScore) {
+            bestDateScore = dateScore;
+            mapping.date = key;
+        }
+    });
+    
+    // Find amount column - highest numeric score, not the date column
+    let bestAmountScore = 0;
+    columns.forEach(key => {
+        if (key === mapping.date) return; // Skip date column
+        
+        const col = analysis[key];
+        const amountScore = col.types.amount + (col.patterns.isNumeric * 2) + 
+                           (col.patterns.hasSymbols * 0.5); // $ signs, commas
+        if (amountScore > bestAmountScore) {
+            bestAmountScore = amountScore;
+            mapping.amount = key;
+        }
+    });
+    
+    // Find description column - longest average text, not date or amount
+    let bestDescScore = 0;
+    columns.forEach(key => {
+        if (key === mapping.date || key === mapping.amount) return;
+        
+        const col = analysis[key];
+        const descScore = col.types.description + 
+                         (col.patterns.avgLength / 10) + 
+                         (col.patterns.hasLetters * 2) -
+                         (col.patterns.isEmpty * 2);
+        
+        if (descScore > bestDescScore) {
+            bestDescScore = descScore;
+            mapping.description = key;
+        }
+    });
+    
+    // Fallback logic if we couldn't identify columns
+    if (!mapping.date) {
+        // Try to find date by position (often first column)
+        mapping.date = columns[0];
+    }
+    
+    if (!mapping.amount) {
+        // Look for any column with numbers
+        for (const key of columns) {
+            if (key !== mapping.date && analysis[key].patterns.hasNumbers > 0) {
+                mapping.amount = key;
+                break;
+            }
+        }
+    }
+    
+    if (!mapping.description) {
+        // Use the longest text column
+        let maxLength = 0;
+        for (const key of columns) {
+            if (key !== mapping.date && key !== mapping.amount) {
+                if (analysis[key].patterns.avgLength > maxLength) {
+                    maxLength = analysis[key].patterns.avgLength;
+                    mapping.description = key;
+                }
+            }
+        }
+    }
+    
+    return mapping;
+}
+
+function parseRowWithMapping(row, mapping, rowNumber) {
+    try {
+        // Extract values using the mapping
+        const dateValue = row[mapping.date];
+        const amountValue = row[mapping.amount];
+        const descValue = row[mapping.description];
+        
+        console.log(`Parsing row ${rowNumber}:`, {
+            date: `${mapping.date} = "${dateValue}"`,
+            amount: `${mapping.amount} = "${amountValue}"`,
+            description: `${mapping.description} = "${descValue}"`
+        });
+        
+        // Parse date
+        const parsedDate = parseFlexibleDate(dateValue);
+        if (!parsedDate) {
+            console.log(`❌ Row ${rowNumber}: Invalid date "${dateValue}"`);
+            return null;
+        }
+        
+        // Parse amount
+        const parsedAmount = parseFlexibleAmount(amountValue);
+        if (parsedAmount === null || parsedAmount === 0) {
+            console.log(`❌ Row ${rowNumber}: Invalid amount "${amountValue}"`);
+            return null;
+        }
+        
+        // Parse description
+        const description = String(descValue || '').trim();
+        if (!description || description.length < 3) {
+            console.log(`❌ Row ${rowNumber}: Invalid description "${description}"`);
+            return null;
+        }
+        
+        // Extract merchant from description
+        const merchant = extractMerchant(description);
+        
+        const transaction = {
+            date: parsedDate,
+            description: description,
+            amount: parsedAmount,
+            category: 'Other',
+            merchant: merchant
+        };
+        
+        console.log(`✅ Row ${rowNumber} parsed successfully:`, transaction);
+        return transaction;
+        
+    } catch (error) {
+        console.log(`❌ Row ${rowNumber} parsing error:`, error.message);
+        return null;
+    }
+}
+
+function parseFlexibleDate(dateStr) {
+    if (!dateStr) return null;
+    
+    const cleaned = String(dateStr).trim();
+    if (!cleaned) return null;
+    
+    // Try various date formats
+    const formats = [
+        // MM/DD/YYYY variants
+        /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+        /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/,
+        // MM-DD-YYYY variants  
+        /^(\d{1,2})-(\d{1,2})-(\d{4})$/,
+        /^(\d{1,2})-(\d{1,2})-(\d{2})$/,
+        // YYYY-MM-DD
+        /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
+    ];
+    
+    for (const format of formats) {
+        const match = cleaned.match(format);
+        if (match) {
+            let year, month, day;
+            
+            if (format.source.includes('(\\d{4})')) {
+                // Has 4-digit year
+                if (format.source.startsWith('^(\\d{4})')) {
+                    // YYYY-MM-DD
+                    [, year, month, day] = match;
+                } else {
+                    // MM/DD/YYYY or MM-DD-YYYY
+                    [, month, day, year] = match;
+                }
+            } else {
+                // 2-digit year - assume 20XX
+                [, month, day, year] = match;
+                year = '20' + year;
+            }
+            
+            year = parseInt(year);
+            month = parseInt(month);
+            day = parseInt(day);
+            
+            // Validate ranges
+            if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+            }
+        }
+    }
+    
+    // Try JavaScript Date parsing as fallback
+    try {
+        const date = new Date(cleaned);
+        if (!isNaN(date.getTime())) {
+            return date.toISOString().split('T')[0];
+        }
+    } catch (e) {
+        // Ignore
+    }
+    
+    return null;
+}
+
+function parseFlexibleAmount(amountStr) {
+    if (!amountStr) return null;
+    
+    let cleaned = String(amountStr).trim();
+    if (!cleaned) return null;
+    
+    // Remove common currency symbols and formatting
+    cleaned = cleaned.replace(/[$,\s]/g, '');
+    
+    // Handle parentheses as negative (accounting format)
+    if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
+        cleaned = '-' + cleaned.slice(1, -1);
+    }
+    
+    // Try to parse as number
+    const parsed = parseFloat(cleaned);
+    
+    if (isNaN(parsed)) {
+        return null;
+    }
+    
+    return parsed;
+}
+
+function extractMerchant(description) {
+    if (!description) return 'Unknown';
+    
+    // Common patterns to extract merchant names
+    const patterns = [
+        /^([A-Z][A-Z\s&]+?)(?:\s+\d|\s+#|\s+ON\s|\s+REF|\s+AUTH)/,  // MERCHANT NAME followed by numbers/keywords
+        /^([A-Z][A-Z\s&]{3,}?)(?:\s+[A-Z]{2}\s|\s+\d)/,            // MERCHANT NAME followed by state or numbers
+        /^(.*?)\s+(?:PURCHASE|PAYMENT|TRANSFER|WITHDRAWAL)/i,        // Text before transaction type
+        /^([^0-9#]{4,}?)(?:\s+[0-9#])/,                            // Non-numeric text before numbers
+    ];
+    
+    for (const pattern of patterns) {
+        const match = description.match(pattern);
+        if (match) {
+            return match[1].trim();
+        }
+    }
+    
+    // Fallback: take first few words
+    const words = description.split(/\s+/);
+    if (words.length >= 2) {
+        return words.slice(0, 2).join(' ');
+    }
+    
+    return words[0] || 'Unknown';
+}

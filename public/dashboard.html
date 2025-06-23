@@ -1130,7 +1130,7 @@
                 formData.append('account_name', `${bankName} Checking`);
             }
             
-            formData.append('format', 'wells_fargo'); // Specify Wells Fargo format
+            // No need to specify format - using intelligent universal parser
             
             try {
                 let token = localStorage.getItem('authToken');
@@ -1142,7 +1142,7 @@
                 // Show loading status
                 document.getElementById(`uploadStatus-${bankId}`).innerHTML = `
                     <div style="color: var(--primary-gold); padding: 1rem; background: rgba(255, 215, 0, 0.1); border-radius: 8px; border: 1px solid var(--dark-gold);">
-                        <i class="fas fa-spinner fa-spin"></i> Processing ${file.name}...
+                        <i class="fas fa-brain fa-spin"></i> Analyzing ${file.name} with intelligent parser...
                     </div>
                 `;
                 
