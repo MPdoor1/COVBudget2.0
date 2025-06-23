@@ -182,6 +182,8 @@ const mockQuery = async (text, params) => {
       updated_at: new Date()
     };
     mockAccounts.push(newAccount);
+    console.log('Created mock account:', newAccount);
+    console.log('Total mock accounts:', mockAccounts.length);
     return { rows: [newAccount] };
   }
   
@@ -204,19 +206,28 @@ const mockQuery = async (text, params) => {
       updated_at: new Date()
     };
     mockTransactions.push(newTransaction);
-    console.log('Mock transaction created:', { id: newTransaction.id, amount: newTransaction.amount, description: newTransaction.description?.substring(0, 50) });
+    console.log('Created mock transaction:', { id: newTransaction.id, amount: newTransaction.amount, description: newTransaction.description?.substring(0, 50) });
+    console.log('Total mock transactions:', mockTransactions.length);
     return { rows: [newTransaction] };
   }
   
   // Handle SELECT from accounts
   if (text.includes('SELECT') && text.includes('accounts')) {
-    const userAccounts = mockAccounts.filter(acc => acc.user_id === params[0] && acc.is_active);
+    const userId = params[0];
+    console.log('Querying accounts for user:', userId);
+    console.log('Available accounts:', mockAccounts.map(acc => ({ id: acc.id, user_id: acc.user_id, name: acc.name })));
+    const userAccounts = mockAccounts.filter(acc => acc.user_id === userId && acc.is_active);
+    console.log('Filtered accounts:', userAccounts.length);
     return { rows: userAccounts };
   }
   
   // Handle SELECT from transactions
   if (text.includes('SELECT') && text.includes('transactions')) {
-    const userTransactions = mockTransactions.filter(tx => tx.user_id === params[0]);
+    const userId = params[0];
+    console.log('Querying transactions for user:', userId);
+    console.log('Available transactions:', mockTransactions.map(tx => ({ id: tx.id, user_id: tx.user_id, amount: tx.amount })));
+    const userTransactions = mockTransactions.filter(tx => tx.user_id === userId);
+    console.log('Filtered transactions:', userTransactions.length);
     return { rows: userTransactions };
   }
   
