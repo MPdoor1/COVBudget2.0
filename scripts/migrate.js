@@ -381,6 +381,18 @@ async function createTables(client) {
     CREATE INDEX IF NOT EXISTS idx_budgets_user_category ON budgets(user_id, category_id);
   `);
   
+  // Create unique constraint for transaction deduplication
+  try {
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique_account_transaction 
+      ON transactions(account_id, transaction_id) 
+      WHERE transaction_id IS NOT NULL;
+    `);
+    console.log('✅ Created unique constraint for transaction deduplication');
+  } catch (error) {
+    console.log('Note: Unique constraint may already exist:', error.message);
+  }
+  
   console.log('✅ Database tables created successfully');
 }
 

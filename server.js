@@ -136,11 +136,23 @@ async function initializeDatabase() {
           ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
         });
         await dbClient.connect();
-        console.log('Connected to database');
+        console.log('✅ Connected to database');
+        
+        // Ensure unique constraint exists for transaction deduplication
+        try {
+          await dbClient.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique_account_transaction 
+            ON transactions(account_id, transaction_id) 
+            WHERE transaction_id IS NOT NULL;
+          `);
+          console.log('✅ Transaction deduplication constraint verified');
+        } catch (constraintError) {
+          console.log('⚠️  Note: Could not create transaction constraint:', constraintError.message);
+        }
       }
     }
   } catch (error) {
-    console.log('Database connection failed:', error.message);
+    console.log('❌ Database connection failed:', error.message);
   }
 }
 
