@@ -165,13 +165,13 @@ const query = async (text, params) => {
 
 // Mock query function for development
 const mockQuery = async (text, params) => {
-  console.log('Mock query:', text, params);
+  console.log('Mock query:', text.substring(0, 100) + '...', 'Params:', params?.slice(0, 3));
   
   // Handle INSERT INTO accounts
   if (text.includes('INSERT INTO accounts')) {
     const [userId, name, type, bankName, balance] = params;
     const newAccount = {
-      id: 'mock-' + Date.now(),
+      id: 'mock-account-' + Date.now(),
       user_id: userId,
       name,
       type,
@@ -183,6 +183,29 @@ const mockQuery = async (text, params) => {
     };
     mockAccounts.push(newAccount);
     return { rows: [newAccount] };
+  }
+  
+  // Handle INSERT INTO transactions
+  if (text.includes('INSERT INTO transactions')) {
+    const [userId, accountId, transactionId, amount, date, description, categoryPrimary, category, merchantName, currencyCode] = params;
+    const newTransaction = {
+      id: 'mock-tx-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+      user_id: userId,
+      account_id: accountId,
+      transaction_id: transactionId,
+      amount: parseFloat(amount),
+      date: date,
+      description: description,
+      category_primary: categoryPrimary,
+      category: category,
+      merchant_name: merchantName,
+      iso_currency_code: currencyCode,
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+    mockTransactions.push(newTransaction);
+    console.log('Mock transaction created:', { id: newTransaction.id, amount: newTransaction.amount, description: newTransaction.description?.substring(0, 50) });
+    return { rows: [newTransaction] };
   }
   
   // Handle SELECT from accounts
@@ -218,41 +241,14 @@ const mockQuery = async (text, params) => {
     return { rows: [newCategory] };
   }
   
-  // Handle UPDATE accounts (for soft delete)
-  if (text.includes('UPDATE accounts') && text.includes('is_active = false')) {
+  // Handle account verification queries
+  if (text.includes('SELECT id FROM accounts WHERE id =') && text.includes('AND user_id =')) {
     const [accountId, userId] = params;
-    const accountIndex = mockAccounts.findIndex(acc => acc.id === accountId && acc.user_id === userId);
-    if (accountIndex !== -1) {
-      mockAccounts[accountIndex].is_active = false;
-      mockAccounts[accountIndex].updated_at = new Date();
-      return { rows: [mockAccounts[accountIndex]] };
-    }
-    return { rows: [] };
+    const account = mockAccounts.find(acc => acc.id === accountId && acc.user_id === userId);
+    return { rows: account ? [account] : [] };
   }
   
-  // Handle INSERT INTO users (registration)
-  if (text.includes('INSERT INTO users')) {
-    const [name, email, passwordHash] = params;
-    const newUser = {
-      id: 'mock-user-' + Date.now(),
-      name,
-      email,
-      password_hash: passwordHash,
-      created_at: new Date(),
-      updated_at: new Date()
-    };
-    mockUsers.push(newUser);
-    return { rows: [newUser] };
-  }
-  
-  // Handle SELECT from users (login)
-  if (text.includes('SELECT') && text.includes('users') && text.includes('email')) {
-    const email = params[0];
-    const user = mockUsers.find(u => u.email === email);
-    return { rows: user ? [user] : [] };
-  }
-  
-  // Default empty response
+  // Default response for other queries
   return { rows: [] };
 };
 
@@ -1119,33 +1115,16 @@ const upload = multer({
 // Bank statement upload endpoint (requires authentication)
 app.post('/api/upload-statement', authenticateToken, upload.single('statement'), async (req, res) => {
   try {
-    if (!dbClient && process.env.NODE_ENV !== 'development') {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const { account_id, accountName = 'Unknown Account', format } = req.body;
-    
-    // Verify account ownership if account_id is provided
-    if (account_id && dbClient) {
-      const accountCheck = await query(
-        'SELECT id FROM accounts WHERE id = $1 AND user_id = $2 AND is_active = true',
-        [account_id, req.user.userId]
-      );
-      
-      if (accountCheck.rows.length === 0) {
-        return res.status(400).json({ error: 'Invalid account or account not found' });
-      }
-    }
-
+    const { account_id, format = 'wells_fargo' } = req.body;
+    const accountName = req.body.account_name || 'Uploaded Account';
     const filePath = req.file.path;
-    const fileName = req.file.originalname;
-    const fileExt = path.extname(fileName).toLowerCase();
+    const fileExt = path.extname(req.file.originalname).toLowerCase();
 
-    console.log(`Processing statement upload: ${fileName}`);
+    console.log('Processing statement upload:', req.file.originalname);
 
     let transactions = [];
 
@@ -1167,66 +1146,118 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
       let accountId = account_id;
 
       if (dbClient) {
-        // Create or get institution and account
-        try {
-          const institutionResult = await dbClient.query(`
-            INSERT INTO institutions (name, country) 
-            VALUES ($1, 'US') 
-            ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-            RETURNING id
-          `, [accountName]);
-        } catch (instError) {
-          console.warn('Institution creation failed:', instError.message);
-        }
-
-        // Use provided account_id or create new account
+        console.log('Processing with database client...');
+        
+        // Ensure we have a valid account_id
         if (!account_id) {
-          // Create new account for this upload
-          const accountResult = await query(`
-            INSERT INTO accounts (user_id, name, type, bank_name, is_active)
-            VALUES ($1, $2, 'checking', 'Uploaded Bank', true)
-            RETURNING id
-          `, [req.user.userId, accountName]);
-          
-          accountId = accountResult.rows[0].id;
+          console.log('Creating new account for upload...');
+          try {
+            const accountResult = await query(`
+              INSERT INTO accounts (user_id, name, type, bank_name, balance, is_active, created_at, updated_at)
+              VALUES ($1, $2, 'checking', 'Uploaded Bank', 0, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              RETURNING id
+            `, [req.user.userId, accountName]);
+            
+            if (accountResult.rows.length > 0) {
+              accountId = accountResult.rows[0].id;
+              console.log('Created new account with ID:', accountId);
+            } else {
+              throw new Error('Failed to create account - no ID returned');
+            }
+          } catch (accountError) {
+            console.error('Account creation failed:', accountError);
+            throw new Error(`Failed to create account: ${accountError.message}`);
+          }
+        } else {
+          // Verify the account exists and belongs to the user
+          try {
+            const accountCheck = await query(`
+              SELECT id FROM accounts WHERE id = $1 AND user_id = $2
+            `, [account_id, req.user.userId]);
+            
+            if (accountCheck.rows.length === 0) {
+              throw new Error('Account not found or access denied');
+            }
+            console.log('Using existing account ID:', account_id);
+          } catch (checkError) {
+            console.error('Account verification failed:', checkError);
+            throw new Error(`Account verification failed: ${checkError.message}`);
+          }
         }
 
-        // Insert transactions
-        for (const transaction of transactions) {
+        // Insert transactions with proper error handling
+        console.log(`Inserting ${transactions.length} transactions...`);
+        for (let i = 0; i < transactions.length; i++) {
+          const transaction = transactions[i];
           try {
-            await query(`
+            // Validate transaction data before insertion
+            if (!transaction.date || !transaction.description || transaction.amount === undefined || transaction.amount === null) {
+              console.warn(`Skipping invalid transaction ${i + 1}:`, transaction);
+              continue;
+            }
+
+            // Ensure date is in proper format
+            let formattedDate;
+            if (typeof transaction.date === 'string') {
+              formattedDate = transaction.date;
+            } else if (transaction.date instanceof Date) {
+              formattedDate = transaction.date.toISOString().split('T')[0];
+            } else {
+              console.warn(`Invalid date format for transaction ${i + 1}:`, transaction.date);
+              continue;
+            }
+
+            // Generate unique transaction ID
+            const transactionId = `upload_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}`;
+
+            const insertResult = await query(`
               INSERT INTO transactions (
                 user_id, account_id, transaction_id, amount, date, description, 
                 category_primary, category, merchant_name, 
                 iso_currency_code, created_at, updated_at
               ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              ON CONFLICT (account_id, transaction_id) DO NOTHING
+              ON CONFLICT (transaction_id) DO NOTHING
+              RETURNING id
             `, [
               req.user.userId,
               accountId,
-              `upload_${Date.now()}_${insertedCount}`, // Unique transaction ID
-              transaction.amount,
-              transaction.date,
-              transaction.description,
+              transactionId,
+              parseFloat(transaction.amount),
+              formattedDate,
+              transaction.description.substring(0, 500), // Ensure it fits in VARCHAR(500)
               transaction.category || 'Other',
               transaction.category || 'Other',
-              transaction.merchant || null,
+              transaction.merchant ? transaction.merchant.substring(0, 255) : null,
               'USD'
             ]);
-            insertedCount++;
+            
+            if (insertResult.rows.length > 0) {
+              insertedCount++;
+              console.log(`✓ Inserted transaction ${i + 1}/${transactions.length}: ${transaction.description.substring(0, 50)}...`);
+            } else {
+              console.log(`- Skipped duplicate transaction ${i + 1}: ${transaction.description.substring(0, 50)}...`);
+            }
+            
           } catch (txError) {
-            // Enhanced logging for failed inserts to help diagnose production issues
-            console.error('Failed to insert transaction', {
-              accountId,
-              transaction,
-              error: txError,
-              errorMessage: txError?.message,
-              errorDetail: txError?.detail,
-              errorCode: txError?.code,
-              errorStack: txError?.stack
+            console.error(`Failed to insert transaction ${i + 1}:`, {
+              transaction: {
+                date: transaction.date,
+                amount: transaction.amount,
+                description: transaction.description?.substring(0, 100)
+              },
+              error: {
+                message: txError.message,
+                detail: txError.detail,
+                code: txError.code,
+                constraint: txError.constraint
+              }
             });
+            // Continue with next transaction instead of failing completely
           }
         }
+        
+        console.log(`Transaction insertion complete. Inserted: ${insertedCount}/${transactions.length}`);
+        
       } else {
         // Development mode - simulate processing
         console.log('Development mode: simulating transaction processing');
@@ -1235,7 +1266,7 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
       }
 
       // Get date range for summary
-      const dates = transactions.map(t => t.date).sort();
+      const dates = transactions.map(t => t.date).filter(d => d).sort();
       const dateRange = dates.length > 0 ? 
         `${dates[0]} to ${dates[dates.length - 1]}` : 'Unknown';
 
@@ -1244,15 +1275,17 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
         transactions_count: insertedCount,
         transactionCount: insertedCount,
         totalParsed: transactions.length,
+        accountId: accountId,
         accountName: accountName,
         dateRange: dateRange,
-        message: `Successfully processed ${insertedCount} transactions`
+        message: `Successfully processed ${insertedCount} of ${transactions.length} transactions`
       });
 
     } catch (parseError) {
       console.error('File parsing error:', parseError);
       res.status(400).json({ 
-        error: `Failed to parse file: ${parseError.message}` 
+        error: `Failed to parse file: ${parseError.message}`,
+        details: parseError.stack
       });
     } finally {
       // Clean up uploaded file
@@ -1265,7 +1298,10 @@ app.post('/api/upload-statement', authenticateToken, upload.single('statement'),
 
   } catch (error) {
     console.error('Statement upload error:', error);
-    res.status(500).json({ error: 'Failed to process statement upload' });
+    res.status(500).json({ 
+      error: 'Failed to process statement upload',
+      details: error.message
+    });
   }
 });
 
@@ -1364,76 +1400,120 @@ function parseExcelFile(filePath, format = null) {
 function parseWellsFargoRow(row, rowIndex) {
   console.log(`Parsing Wells Fargo row ${rowIndex}:`, row);
   
-  const keys = Object.keys(row);
-  // Clean and normalize values: trim whitespace and remove surrounding quotes
-  const values = Object.values(row).map(val => {
-    if (typeof val === 'string') {
-      return val.trim().replace(/^"+|"+$/g, '');
-    }
-    return val;
-  });
-  
-  console.log('Row keys:', keys);
-  console.log('Row values:', values);
-  
   try {
+    const keys = Object.keys(row);
+    // Clean and normalize values: trim whitespace and remove surrounding quotes
+    const values = Object.values(row).map(val => {
+      if (val === null || val === undefined) return '';
+      const str = String(val).trim();
+      // Remove surrounding quotes if present
+      return str.replace(/^["']|["']$/g, '');
+    });
+    
+    console.log('Row keys:', keys);
+    console.log('Row values:', values);
+    
     let date = null;
     let amount = null;
-    let description = null;
+    let description = '';
     
-    // Wells Fargo format: A=Date, B=Amount, C=*, D=Empty, E/F/G=Description parts
-    // For a 7-column CSV: columns 0,1,2,3,4,5,6 = A,B,C,D,E,F,G
+    // Wells Fargo CSV format typically has:
+    // Column A (0): Date
+    // Column B (1): Amount 
+    // Column C (2): * (status indicator)
+    // Column D (3): Empty or check number
+    // Column E+ (4+): Description parts
     
-    // Get date from column A (index 0)
-    if (values[0] && String(values[0]).match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/)) {
+    // Extract date from column A (index 0)
+    if (values.length > 0 && values[0]) {
+      const dateStr = values[0];
+      console.log(`Found date in column A (0): ${dateStr}`);
       try {
-        date = parseDate(values[0]);
-        console.log(`Found date in column A (0):`, values[0]);
-      } catch (error) {
-        console.log(`Failed to parse date from column A:`, error.message);
+        date = parseDate(dateStr);
+      } catch (dateError) {
+        console.warn(`Failed to parse date "${dateStr}":`, dateError.message);
+        return null;
       }
     }
     
-    // Get amount from column B (index 1)
-    if (values[1] !== null && values[1] !== undefined && values[1] !== '') {
-      const cleanAmount = String(values[1]).replace(/[,$\s]/g, '');
-      const testAmount = parseFloat(cleanAmount);
-      if (!isNaN(testAmount) && testAmount !== 0) {
-        amount = testAmount;
-        console.log(`Found amount in column B (1):`, values[1], '-> parsed as:', amount);
+    // Extract amount from column B (index 1)
+    if (values.length > 1 && values[1]) {
+      const amountStr = String(values[1]).replace(/[,$\s]/g, '');
+      amount = parseFloat(amountStr);
+      console.log(`Found amount in column B (1): ${values[1]} -> parsed as: ${amount}`);
+      
+      if (isNaN(amount)) {
+        console.warn(`Invalid amount in column B: ${values[1]}`);
+        return null;
       }
     }
     
-    // Get description from columns E, F, G (indices 4, 5, 6)
-    let descriptionParts = [];
+    // Extract description from columns E onwards (index 4+)
+    // Skip columns C (index 2) and D (index 3) as they are typically * and empty
+    const descriptionParts = [];
     
-    // Check each column from E onwards
-    for (let i = 4; i < values.length; i++) {
-      const colLetter = String.fromCharCode(69 + (i - 4)); // E, F, G, H, etc.
-      if (values[i] && String(values[i]).trim() && String(values[i]).trim() !== '*' && String(values[i]).trim() !== '') {
-        const part = String(values[i]).trim();
-        // Skip if part is purely numeric (amount mistakenly placed)
-        const numericCheck = part.replace(/[,$]/g, '').match(/^[-+]?\d+(\.\d+)?$/);
-        if (numericCheck) {
-          console.log(`Skipping numeric part in column ${colLetter}:`, part);
-          continue;
+    if (values.length >= 5) {
+      // Look for description starting from column E (index 4)
+      for (let i = 4; i < values.length; i++) {
+        const colLetter = String.fromCharCode(69 + (i - 4)); // E, F, G, H, etc.
+        if (values[i] && String(values[i]).trim() && String(values[i]).trim() !== '*' && String(values[i]).trim() !== '') {
+          const part = String(values[i]).trim();
+          
+          // Skip if part is purely numeric (likely misplaced amount)
+          const numericCheck = part.replace(/[,$-]/g, '').match(/^\d+(\.\d+)?$/);
+          if (numericCheck) {
+            console.log(`Skipping numeric part in column ${colLetter}:`, part);
+            continue;
+          }
+          
+          // Skip very short parts that are likely not meaningful descriptions
+          if (part.length < 3) {
+            console.log(`Skipping short part in column ${colLetter}:`, part);
+            continue;
+          }
+          
+          descriptionParts.push(part);
+          console.log(`Found description part in column ${colLetter} (${i}):`, part);
         }
-        descriptionParts.push(part);
-        console.log(`Found description part in column ${colLetter} (${i}):`, part);
       }
     }
     
+    // If we found description parts, combine them
     if (descriptionParts.length > 0) {
       description = descriptionParts.join(' ').trim();
       console.log(`Combined description from ${descriptionParts.length} parts:`, description);
+    } else {
+      // Fallback: look for the longest non-numeric text field
+      let longestText = '';
+      values.forEach((val, idx) => {
+        if (val && typeof val === 'string' && val.length > longestText.length) {
+          const cleanVal = val.trim();
+          // Skip if it's purely numeric, a date, or very short
+          const isNumeric = cleanVal.replace(/[,$-]/g, '').match(/^\d+(\.\d+)?$/);
+          const isDate = cleanVal.match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/);
+          
+          if (!isNumeric && !isDate && cleanVal.length > 5 && cleanVal !== '*') {
+            longestText = cleanVal;
+            description = cleanVal;
+          }
+        }
+      });
+      
+      if (description) {
+        console.log(`Using fallback description (longest text):`, description);
+      }
     }
     
     console.log(`Wells Fargo parsed: date=${date}, amount=${amount}, description=${description}`);
     
-    // Debug the validation criteria
-    console.log(`Validation check: date=${!!date}, amount=${!isNaN(amount)}, amount!=0=${amount !== 0}, description=${!!description}, desc.length=${description ? description.length : 0}`);
+    // Validate the parsed data
+    const isValidDate = date && !isNaN(new Date(date).getTime());
+    const isValidAmount = !isNaN(amount) && amount !== 0;
+    const isValidDescription = description && description.length > 1;
     
-    if (date && !isNaN(amount) && amount !== 0 && description && description.length > 1) {
+    console.log(`Validation check: date=${isValidDate}, amount=${isValidAmount}, amount!=0=${amount !== 0}, description=${isValidDescription}, desc.length=${description ? description.length : 0}`);
+    
+    if (isValidDate && isValidAmount && isValidDescription) {
       const category = categorizeTransaction(description);
       const transaction = {
         date: date,
@@ -1448,6 +1528,7 @@ function parseWellsFargoRow(row, rowIndex) {
     
     console.log(`✗ Transaction validation failed`);
     return null;
+    
   } catch (error) {
     console.warn(`Failed to parse Wells Fargo row ${rowIndex}:`, error.message);
     return null;
@@ -1646,66 +1727,98 @@ function parseTransactionRow(row) {
   };
 }
 
-// Helper function to parse dates
+// Helper function to parse various date formats
 function parseDate(dateStr) {
-  if (!dateStr) throw new Error('Date string is empty');
+  if (!dateStr) return null;
   
-  const dateString = String(dateStr).trim();
+  // Clean the date string
+  const cleaned = String(dateStr).trim();
   
-  // Try direct parsing first
-  let date = new Date(dateString);
-  if (!isNaN(date.getTime())) {
-    return date.toISOString().split('T')[0];
-  }
+  // Try different date formats
+  const formats = [
+    // MM/DD/YYYY
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+    // MM/DD/YY
+    /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/,
+    // MM-DD-YYYY
+    /^(\d{1,2})-(\d{1,2})-(\d{4})$/,
+    // MM-DD-YY
+    /^(\d{1,2})-(\d{1,2})-(\d{2})$/,
+    // YYYY-MM-DD (ISO format)
+    /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
+    // DD/MM/YYYY (European format)
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+  ];
   
-  // Try MM/DD/YYYY or MM-DD-YYYY format
-  let parts = dateString.split(/[\/\-]/);
-  if (parts.length === 3) {
-    const month = parseInt(parts[0]) - 1;
-    const day = parseInt(parts[1]);
-    let year = parseInt(parts[2]);
+  // Try MM/DD/YYYY or MM/DD/YY format first (most common for US banks)
+  let match = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (match) {
+    let [, month, day, year] = match;
     
-    // Handle 2-digit years
-    if (year < 100) {
-      year += year < 50 ? 2000 : 1900;
+    // Convert 2-digit year to 4-digit
+    if (year.length === 2) {
+      const currentYear = new Date().getFullYear();
+      const currentCentury = Math.floor(currentYear / 100) * 100;
+      year = parseInt(year) <= 30 ? currentCentury + 100 + parseInt(year) : currentCentury + parseInt(year);
     }
     
-    date = new Date(year, month, day);
-    if (!isNaN(date.getTime())) {
+    // Create date object and validate
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    
+    // Check if the date is valid
+    if (date.getFullYear() == year && date.getMonth() == month - 1 && date.getDate() == day) {
+      // Return in YYYY-MM-DD format for database
       return date.toISOString().split('T')[0];
     }
   }
   
-  // Try DD/MM/YYYY format
-  if (parts.length === 3) {
-    const day = parseInt(parts[0]);
-    const month = parseInt(parts[1]) - 1;
-    let year = parseInt(parts[2]);
+  // Try MM-DD-YYYY or MM-DD-YY format
+  match = cleaned.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})$/);
+  if (match) {
+    let [, month, day, year] = match;
     
-    if (year < 100) {
-      year += year < 50 ? 2000 : 1900;
+    // Convert 2-digit year to 4-digit
+    if (year.length === 2) {
+      const currentYear = new Date().getFullYear();
+      const currentCentury = Math.floor(currentYear / 100) * 100;
+      year = parseInt(year) <= 30 ? currentCentury + 100 + parseInt(year) : currentCentury + parseInt(year);
     }
     
-    date = new Date(year, month, day);
-    if (!isNaN(date.getTime())) {
+    // Create date object and validate
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    
+    // Check if the date is valid
+    if (date.getFullYear() == year && date.getMonth() == month - 1 && date.getDate() == day) {
+      // Return in YYYY-MM-DD format for database
       return date.toISOString().split('T')[0];
     }
   }
   
-  // Try YYYY-MM-DD format
-  parts = dateString.split('-');
-  if (parts.length === 3) {
-    const year = parseInt(parts[0]);
-    const month = parseInt(parts[1]) - 1;
-    const day = parseInt(parts[2]);
+  // Try YYYY-MM-DD format (ISO)
+  match = cleaned.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (match) {
+    const [, year, month, day] = match;
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     
-    date = new Date(year, month, day);
-    if (!isNaN(date.getTime())) {
-      return date.toISOString().split('T')[0];
+    // Check if the date is valid
+    if (date.getFullYear() == year && date.getMonth() == month - 1 && date.getDate() == day) {
+      // Already in correct format
+      return cleaned;
     }
   }
   
-  throw new Error(`Invalid date format: ${dateStr}`);
+  // Try parsing as a regular Date object (fallback)
+  try {
+    const date = new Date(cleaned);
+    if (!isNaN(date.getTime())) {
+      // Return in YYYY-MM-DD format for database
+      return date.toISOString().split('T')[0];
+    }
+  } catch (error) {
+    // Continue to throw error below
+  }
+  
+  throw new Error(`Unable to parse date: ${dateStr}`);
 }
 
 // Simple transaction categorization
